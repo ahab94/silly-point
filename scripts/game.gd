@@ -1260,7 +1260,7 @@ func _animate_shot() -> void:
 
 
 func _batter_trudge() -> void:
-	var dir := Vector3(-0.8, 0.0, 0.6).normalized()
+	var dir := Vector3(-0.9, 0.0, -0.45).normalized()   # off towards the leg side, away from the camera
 	batter.run_procedural(func(tt: float) -> Dictionary:
 		var g := Strokes.gait(tt, 1.3, dir)
 		g.grip = (g.rh as Vector3) + Vector3(0, 0.05, 0)
