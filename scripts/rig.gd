@@ -47,6 +47,8 @@ var has_bat := false
 var crouch_helmet := false
 
 var _keys: Array = []
+var _life_t := 0.0
+var _life_phase := 0.0       # so a field full of people doesn't breathe in step
 var _from: Dictionary = {}
 var _key_t := 0.0
 var _parts := {}
@@ -78,6 +80,57 @@ func _mesh_node(name: String, mesh: Mesh, c: Color) -> MeshInstance3D:
 	add_child(mi)
 	_parts[name] = mi
 	return mi
+
+
+## A limb with a shape: a surface of revolution along y (from -0.5 at the
+## joint the limb starts at, to +0.5 at the joint it ends at) whose radius
+## follows `profile`, a list of [u, radius] with u from 0 to 1. This is what
+## turns a stick into a thigh with a muscle, or a sleeve that is fuller at
+## the shoulder than the wrist.
+##
+## Godot concept: SurfaceTool builds a mesh vertex by vertex; generate_normals
+## works out the shading so the surface looks smooth.
+static var _limb_cache := {}
+
+static func _limb_mesh(profile: Array) -> ArrayMesh:
+	var key := str(profile)
+	if _limb_cache.has(key):
+		return _limb_cache[key]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var seg := 14
+	var rows := []
+	var n := 12
+	for i in n + 1:
+		var u := float(i) / float(n)
+		# Smooth (cosine) interpolation between the profile's control points.
+		var r := float(profile[0][1])
+		for k in profile.size() - 1:
+			var u0: float = profile[k][0]
+			var u1: float = profile[k + 1][0]
+			if u >= u0 and u <= u1:
+				var f := (u - u0) / maxf(u1 - u0, 0.0001)
+				f = 0.5 - 0.5 * cos(f * PI)
+				r = lerpf(float(profile[k][1]), float(profile[k + 1][1]), f)
+		rows.append([u - 0.5, r])
+	for i in n:
+		for j in seg:
+			var a0 := TAU * float(j) / float(seg)
+			var a1 := TAU * float(j + 1) / float(seg)
+			var y0: float = rows[i][0]
+			var r0: float = rows[i][1]
+			var y1: float = rows[i + 1][0]
+			var r1: float = rows[i + 1][1]
+			var p00 := Vector3(cos(a0) * r0, y0, sin(a0) * r0)
+			var p01 := Vector3(cos(a1) * r0, y0, sin(a1) * r0)
+			var p10 := Vector3(cos(a0) * r1, y1, sin(a0) * r1)
+			var p11 := Vector3(cos(a1) * r1, y1, sin(a1) * r1)
+			for v in [p00, p10, p11, p00, p11, p01]:
+				st.add_vertex(v)
+	st.generate_normals()
+	var m := st.commit()
+	_limb_cache[key] = m
+	return m
 
 
 static func _cyl(r_top: float, r_bot: float) -> CylinderMesh:
@@ -137,13 +190,13 @@ func build(kit: Color, skin: Color, hat: String, hat_color: Color, pads := false
 	var shoe := Color(0.9, 0.9, 0.88)
 	var pad_col := Color(0.92, 0.92, 0.9)
 	# Body: hips, belly and chest as smooth ellipsoids, joined by a waist.
-	_mesh_node("torso", _cyl(0.15, 0.13), shirt)
+	_mesh_node("torso", _limb_mesh([[0.0, 0.15], [0.5, 0.155], [1.0, 0.16]]), shirt)
 	_mesh_node("hips", _sphere(0.15), trousers)
 	_mesh_node("belly", _sphere(0.14), shirt)
 	_mesh_node("chest", _sphere(0.18), shirt)
 	_mesh_node("belt", _cyl(0.155, 0.155), Color(0.18, 0.16, 0.14))
 	_mesh_node("collar", _cyl(0.07, 0.085), shirt.lightened(0.05))
-	_mesh_node("neck", _cyl(0.05, 0.055), skin)
+	_mesh_node("neck", _limb_mesh([[0.0, 0.062], [1.0, 0.052]]), skin)
 	var head := _mesh_node("head", _sphere(0.113), skin)
 	# Face, seen on fielders and the umpire: the head looks along -z.
 	_child(head, _sphere(0.02), skin.darkened(0.08), Vector3(0, -0.025, -0.112), Vector3(0.9, 1.2, 1.0))         # nose
@@ -154,9 +207,11 @@ func build(kit: Color, skin: Color, hat: String, hat_color: Color, pads := false
 	_child(head, _sphere(0.117), hair, Vector3(0, 0.03, 0.012), Vector3(1.0, 0.85, 1.0))                   # hair
 	head.scale = Vector3(0.92, 1.08, 1.0)
 	for s in ["l", "r"]:
-		_mesh_node(s + "hipj", _sphere(0.088), trousers)
-		_mesh_node(s + "thigh", _cyl(0.085, 0.062), trousers)
-		_mesh_node(s + "shin", _cyl(0.06, 0.045), pad_col if pads else trousers)
+		_mesh_node(s + "hipj", _sphere(0.096), trousers)
+		# Thigh: full at the hip, the quad bulging, narrowing to the knee.
+		_mesh_node(s + "thigh", _limb_mesh([[0.0, 0.094], [0.35, 0.098], [0.8, 0.072], [1.0, 0.066]]), trousers)
+		# Shin: the calf muscle just below the knee, slim at the ankle.
+		_mesh_node(s + "shin", _limb_mesh([[0.0, 0.062], [0.28, 0.07], [0.75, 0.05], [1.0, 0.046]]), pad_col if pads else trousers)
 		_mesh_node(s + "ankle", _sphere(0.046), pad_col if pads else trousers)
 		if pads:
 			var pad := _mesh_node(s + "pad", _box(Vector3(0.17, 1.0, 0.13)), pad_col)
@@ -166,16 +221,18 @@ func build(kit: Color, skin: Color, hat: String, hat_color: Color, pads := false
 			for y in [-0.25, 0.2]:
 				_child(pad, _box(Vector3(0.18, 0.04, 0.14)), Color(0.25, 0.22, 0.2), Vector3(0, y, -0.01))
 			_mesh_node(s + "kneeroll", _sphere(0.088), pad_col)
-		_mesh_node(s + "knee", _sphere(0.066), pad_col if pads else trousers)
+		_mesh_node(s + "knee", _sphere(0.07), pad_col if pads else trousers)
 		# Shoe: white upper, darker sole, rounded toe.
 		var foot := _mesh_node(s + "foot", _box(Vector3(0.095, 0.07, 0.24)), shoe)
 		_child(foot, _box(Vector3(0.1, 0.025, 0.27)), Color(0.3, 0.3, 0.32), Vector3(0, -0.045, -0.01))
 		_child(foot, _sphere(0.05), shoe, Vector3(0, -0.005, -0.12), Vector3(1.0, 0.7, 1.0))
-		_mesh_node(s + "shoulder", _sphere(0.058), shirt)
-		_mesh_node(s + "upper", _cyl(0.056, 0.047), shirt)
-		_mesh_node(s + "fore", _cyl(0.047, 0.038), shirt)        # long sleeves
-		_mesh_node(s + "elbow", _sphere(0.05), shirt)
-		var hand := _mesh_node(s + "hand", _sphere(0.062 if gloves else 0.042), Color(0.93, 0.93, 0.9) if gloves else skin)
+		_mesh_node(s + "shoulder", _sphere(0.07), shirt)
+		# Sleeves: loose and full at the shoulder, the bicep under them,
+		# slimmer at the elbow; the forearm tapers to the wrist.
+		_mesh_node(s + "upper", _limb_mesh([[0.0, 0.066], [0.4, 0.064], [0.85, 0.054], [1.0, 0.052]]), shirt)
+		_mesh_node(s + "fore", _limb_mesh([[0.0, 0.052], [0.3, 0.053], [0.85, 0.042], [1.0, 0.04]]), shirt)
+		_mesh_node(s + "elbow", _sphere(0.054), shirt)
+		var hand := _mesh_node(s + "hand", _sphere(0.062 if gloves else 0.048), Color(0.93, 0.93, 0.9) if gloves else skin)
 		if gloves:
 			hand.scale = Vector3(1.0, 0.9, 1.25)
 			_child(hand, _box(Vector3(0.09, 0.03, 0.06)), Color(0.15, 0.25, 0.55), Vector3(0, 0.035, 0.0))    # padded back
@@ -280,6 +337,7 @@ static func blend(a: Dictionary, b: Dictionary, k: float) -> Dictionary:
 
 
 func _process(delta: float) -> void:
+	_life_t += delta
 	if procedural.is_valid():
 		proc_t += delta
 		pose = _merge(pose, procedural.call(proc_t))
@@ -294,6 +352,10 @@ func _process(delta: float) -> void:
 			"in": e = k * k
 			"out": e = 1.0 - (1.0 - k) * (1.0 - k)
 			"inout": e = k * k * (3.0 - 2.0 * k)
+			"back":
+				# Overshoots a little and settles, like a real follow-through.
+				var c := 1.5
+				e = 1.0 + (c + 1.0) * pow(k - 1.0, 3.0) + c * pow(k - 1.0, 2.0)
 		pose = blend(_from, key[1], e)
 		if k >= 1.0:
 			_keys.pop_front()
@@ -347,7 +409,15 @@ func _at(name: String, p: Vector3) -> void:
 
 
 func _solve() -> void:
-	var p := pose
+	if _life_phase == 0.0:
+		_life_phase = randf_range(0.1, TAU)
+	# Alive: breathing (the chest rises a touch) and a slow sway of the
+	# weight, layered on whatever pose is playing.
+	var p := pose.duplicate()
+	var br := sin(_life_t * 1.7 + _life_phase)
+	var sw := sin(_life_t * 0.55 + _life_phase * 2.0)
+	p.pelvis = (p.pelvis as Vector3) + Vector3(0.0, br * 0.004, 0.0)
+	p.lean = (p.get("lean", Vector3.ZERO) as Vector3) + Vector3(sw * 0.012, br * 0.01, 0.0)
 	var pelvis: Vector3 = p.pelvis
 	var face: Vector3 = (p.face as Vector3)
 	face.y = 0.0

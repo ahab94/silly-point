@@ -194,7 +194,7 @@ Silly Point is a free 3D cricket batting game about all the strange things a cri
 
 ## 10-sixes (Short, 22s)
 
-**Title:** Every six gets a slide whistle and a brass band 🎺 #shorts
+**Title:** Every six gets a slide whistle and an air horn 🎺 #shorts
 
 **Description:**
 

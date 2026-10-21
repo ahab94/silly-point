@@ -187,7 +187,35 @@ static func shot(key: String, foot: String, dir_deg: float, c: Vector3, t: float
 		follow.grip = (follow.grip as Vector3) + Vector3.UP * 0.3
 	if defend:
 		return [[t * 0.5, top, "out"], [t * 0.5, pose, "in"], [0.25, follow, "out"], [0.6, follow]]
-	return [[t * 0.42, top, "out"], [t * 0.58, pose, "in"], [0.3, follow, "out"], [hold, follow]]
+	_body_turn(top, pose, follow, d, key, horizontal)
+	return [[t * 0.42, top, "out"], [t * 0.58, pose, "in"], [0.32, follow, "back"], [hold, follow]]
+
+
+## The body behind the bat: shoulders coil away in the backlift and unwind
+## through the ball towards where it's going, the hips lead the shoulders,
+## and the weight goes through so the back heel comes up.
+static func _body_turn(top: Dictionary, contact: Dictionary, follow: Dictionary, d: Vector3, key: String, horizontal: bool) -> void:
+	var face: Vector3 = contact.get("face", stance().face)
+	var hip: Vector3 = contact.get("hip_face", stance().hip_face)
+	var coil := Basis(Vector3.UP, deg_to_rad(-22.0))     # turn away from the bowler
+	top.face = (coil * face).normalized()
+	top.hip_face = (Basis(Vector3.UP, deg_to_rad(-10.0)) * hip).normalized()
+	var toward := Vector3(d.x, 0.0, d.z).normalized()
+	contact.face = face.lerp(toward, 0.18 if not horizontal else 0.3).normalized()
+	contact.hip_face = hip.lerp(toward, 0.3).normalized()
+	var open := 0.55 if not horizontal else 0.75
+	if key.begins_with("defend"):
+		open = 0.1
+	follow.face = face.lerp(toward, open).normalized()
+	follow.hip_face = hip.lerp(toward, open * 0.8).normalized()
+	if not key.begins_with("defend"):
+		var rf: Vector3 = contact.get("rf", stance().rf)
+		if key in ["pull", "hook", "cut", "upper_cut", "punch"]:
+			# Back-foot shots pivot on the back foot: the front leg swings round.
+			var lf: Vector3 = contact.get("lf", stance().lf)
+			follow.lf = lf + toward * 0.12 + Vector3(0.0, 0.0, 0.08)
+		elif not key.contains("sweep"):
+			follow.rf = rf + Vector3(0.0, 0.1, -0.12)    # back heel up, weight through
 
 
 static func leave() -> Array:

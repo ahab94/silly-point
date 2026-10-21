@@ -50,7 +50,14 @@ static func make_field(name: String) -> Array:
 	var out := []
 	for f in FIELDS[name]:
 		var dist: float = f[2]
-		out.append({"name": f[0], "pos": polar(f[1], dist), "close": dist < 17.0,
+		var pos := polar(f[1], dist)
+		# Deep fielders stand just inside the rope. Distances are from the
+		# batter but the rope is centred mid-pitch, so the ones behind the
+		# batter (third man, fine leg) would otherwise end up beyond it.
+		var from_c := pos - CENTRE
+		if from_c.length() > BOUNDARY - 3.0:
+			pos = CENTRE + from_c.normalized() * (BOUNDARY - 3.0)
+		out.append({"name": f[0], "pos": pos, "close": dist < 17.0,
 				"keeper": f[0] == "Wicketkeeper"})
 	# The bowler finishes the follow-through just down the pitch.
 	# Where the run-up's follow-through finishes (game.gd _place_bowler).

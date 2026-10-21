@@ -1270,6 +1270,17 @@ func _place_fielders() -> void:
 		var p: Vector2 = field[i].pos
 		f.position = Vector3(p.x, 0.0, p.y)
 		var face := Vector3(-p.x, 0.0, -p.y)    # towards the batter
+		# Outfielders start a few steps back and walk in as the bowler runs
+		# up, arriving at their real spot (the one the fielding sim uses).
+		if not field[i].close and not field[i].keeper:
+			var back := -face.normalized() * 2.4
+			var start := f.position + back
+			var from_c := Vector2(start.x, start.z) - Fielding.CENTRE
+			if from_c.length() > Fielding.BOUNDARY - 1.0:
+				back *= 0.3     # already on the rope: just a step or two
+			f.position += back
+			f.set_meta("walk_from", f.position)
+			f.set_meta("walk_to", Vector3(p.x, 0.0, p.y))
 		var crouch := 0.15
 		if field[i].keeper:
 			crouch = 1.0
@@ -1299,6 +1310,20 @@ func _place_bowler(k: float) -> void:
 
 func _start_runup() -> void:
 	var r := _runup_time()
+	for i in fielder_figs.size():
+		var f: Node3D = fielder_figs[i]
+		if not f.visible or not f.has_meta("walk_to"):
+			continue
+		var to: Vector3 = f.get_meta("walk_to")
+		var dir: Vector3 = (to - f.position).normalized()
+		f.run_procedural(func(tt: float) -> Dictionary: return Strokes.gait(tt, 1.9, dir))
+		var tw := create_tween()
+		tw.tween_property(f, "position", to, r * 0.95).set_trans(Tween.TRANS_SINE)
+		var face := Vector3(-to.x, 0.0, -to.z).normalized()
+		tw.tween_callback(func() -> void:
+			if f.get_meta("state", "") == "":
+				f.play([[0.18, Strokes.ready_pose(face, 0.32), "out"]]))
+		f.remove_meta("walk_to")
 	# Two taps of the bat while the bowler runs in, then the trigger movement
 	# so the batter is set at release.
 	var keys := Strokes.taps(2 if r > 1.2 else 1)
