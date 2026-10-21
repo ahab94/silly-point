@@ -393,7 +393,12 @@ func _new_ball() -> void:
 		hud.flash("FREE HIT", "You can't be out (except run out). Swing!", Color(1, 0.6, 0.15), 1.4)
 	_bot_plan = {}
 	if _bot:
-		if _flags.get("bot", "") == "leave":
+		if _flags.get("bot", "") == "charge":
+			# Charges early in the run-up (the bowler may see it coming) and
+			# swings for the ball that was planned, not the one that arrives.
+			_bot_plan = {"shot": "loft", "foot": "front", "aim": 0, "dance": true, "th_adj": 0.0,
+					"t_press": Batting.ideal_press(traj, "loft", "dance"), "charge_early": true}
+		elif _flags.get("bot", "") == "leave":
 			_bot_plan = {"shot": "leave", "foot": "neutral", "aim": 0, "t_press": 0.0, "dance": false, "th_adj": 0.0}
 		elif _flags.has("rookie"):
 			_bot_plan = Autopilot.rookie(traj, d, _rookie_rng, float(_flags.rookie), level.mode == "survive")
@@ -428,6 +433,8 @@ func _process(delta: float) -> void:
 				_start_runup()
 		Phase.RUNUP:
 			_place_bowler(phase_t / _runup_time())
+			if _bot and _bot_plan.get("charge_early", false) and not danced and phase_t > _runup_time() - 0.35:
+				_dance()
 			if phase_t >= _runup_time():
 				_release()
 		Phase.FLIGHT:
@@ -530,6 +537,9 @@ func _release() -> void:
 	ball_shadow.visible = true
 	batter.play([[0.3, Strokes.backlift(), "inout"]])
 	hud.show_ball_cam(d, 0.55)
+	_event("release %s %s" % [String(d.kind), String(bowler.style)])
+	if d.no_ball:
+		_event("noball")
 	_since_release = 0.0
 	if d.no_ball:
 		hud.flash("NO BALL", "", Color(1, 0.6, 0.15), 1.0)
@@ -611,6 +621,7 @@ func _flight(delta: float) -> void:
 		pitch_mark.position = Vector3((traj.pitch_pos as Vector3).x, 0.003, (traj.pitch_pos as Vector3).z)
 		if d.crack != "":
 			hud.commentary(Commentary.line(d.crack, rng))
+			_event(String(d.crack))
 	if shot_taken and t >= flight_end:
 		_begin_play()
 
@@ -630,6 +641,14 @@ func _begin_play() -> void:
 	play_t = 0.0
 	_defl = {}
 	_impact_sound()
+	var what: String = bat.contact
+	if bat.helmet:
+		what = "helmet"
+	elif bat.pad:
+		what = "pad"
+	elif bat.bowled:
+		what = "bowled"
+	_event("contact %s %s" % [what, String(inp.get("shot", ""))])
 	if bat.bowled or bat.played_on:
 		stadium.knock_stumps(BallSim.pos_at(traj, BallSim.time_at_z(traj, 0.0)).x)
 	if bat.hit_wicket or bat.stumped:
@@ -668,6 +687,12 @@ func _impact_sound() -> void:
 	# Anything that might be out gets a big appeal from the fielders.
 	if out_o.dismissal in ["lbw", "caught_behind"]:
 		sound.play("howzat", -3.0, randf_range(0.95, 1.05), 0.25)
+
+
+## Dev flag --log-events: timestamped moments, for cutting videos.
+func _event(name: String) -> void:
+	if _flags.has("log-events"):
+		print("EVENT %.2f %s" % [_sim_time, name])
 
 
 func _muted() -> bool:
@@ -909,6 +934,7 @@ func _decide() -> void:
 			hud.flash("OUT!", Rules.how_out(o.dismissal), Color(1, 0.35, 0.3), 30.0)
 			hud.commentary(Commentary.line(o.comment, rng))
 			_set_phase(Phase.REVIEW)
+			_event("given_out %s" % String(o.dismissal))
 			return
 		_apply(true)
 		return
@@ -924,6 +950,7 @@ func _decide() -> void:
 func _take_review() -> void:
 	if phase != Phase.REVIEW:
 		return
+	_event("review")
 	hud.hide_review()
 	reviews -= 1
 	_show_tracking(false)
@@ -993,6 +1020,7 @@ func _finish_review() -> void:
 		if not _muted():
 			sound.play("record_scratch", -3.0)
 		_umpire_finger(true)
+	_event("verdict %s" % verdict.to_lower().replace(" ", "_").replace(":", ""))
 	if o.dismissal == "lbw":
 		var tr: Dictionary = o.track
 		hud.show_drs([["Pitching", tr.pitching], ["Impact", tr.impact], ["Wickets", tr.wickets]], verdict)
@@ -1038,6 +1066,20 @@ func _apply(out: bool) -> void:
 	if d.no_ball and not o.wide:
 		hud.commentary(Commentary.line("no_ball", rng))
 	strip.append(symbol)
+	if out:
+		_event("out %s%s" % [String(o.dismissal), " duck" if batter_runs == 0 else ""])
+	elif int(o.runs) == 6:
+		_event("six")
+	elif int(o.runs) == 4:
+		_event("four")
+	elif o.comment == "dropped":
+		_event("dropped")
+	elif o.comment in ["beaten", "edge_safe", "helmet"]:
+		_event(String(o.comment))
+	else:
+		_event("runs %d" % int(o.runs))
+	if free_hit:
+		_event("freehit_ball")
 	_crowd_sound(out)
 	batter_runs = 0 if out else batter_runs + int(o.runs)
 	free_hit = bool(o.free_hit_next) or (free_hit and not o.legal)
@@ -1078,6 +1120,7 @@ func _after_ball() -> void:
 func _end(win: bool) -> void:
 	won = win
 	_set_phase(Phase.END)
+	_event("end %s" % ("won" if win else "lost"))
 	var stars := 0
 	var title := "LOST"
 	var summary := ""
@@ -1223,13 +1266,33 @@ func _batter_trudge() -> void:
 	tw.tween_property(batter, "position", batter.position + dir * 3.5, 2.6)
 
 
+## Tall screens (phones held upright, Shorts): keep the width in view and
+## let the extra height show more pitch and sky.
+func _portrait() -> bool:
+	var sz := get_viewport().get_visible_rect().size
+	return sz.y > sz.x
+
+
+func _base_fov() -> float:
+	return 52.0 if _portrait() else 50.0
+
+
 func _set_bat_cam() -> void:
+	camera.keep_aspect = Camera3D.KEEP_WIDTH if _portrait() else Camera3D.KEEP_HEIGHT
+	if _portrait() and cam_mode != "bowler":
+		camera.fov = _base_fov()
+		camera.position = Vector3(0.45, 2.25, 3.7)
+		_cam_look = Vector3(-0.1, 0.9, -8.0)
+		camera.look_at(_cam_look)
+		if hud:
+			hud.mirror = false
+		return
 	if cam_mode == "bowler":
 		camera.fov = BOWL_CAM_FOV
 		camera.position = BOWL_CAM_POS
 		_cam_look = BOWL_CAM_LOOK
 	else:
-		camera.fov = 50.0
+		camera.fov = _base_fov()
 		camera.position = BAT_CAM_POS
 		_cam_look = BAT_CAM_LOOK
 	camera.look_at(_cam_look)
@@ -1252,7 +1315,7 @@ func _update_camera(delta: float) -> void:
 	if hit and ((phase == Phase.PLAY and play_t > 0.45) or phase == Phase.DECIDE):
 		var b := ball.position
 		if Vector2(b.x, b.z + 1.0).length() > 6.0:
-			camera.fov = lerpf(camera.fov, 50.0, clampf(delta * 3.0, 0.0, 1.0))
+			camera.fov = lerpf(camera.fov, _base_fov(), clampf(delta * 3.0, 0.0, 1.0))
 			var want_pos := Vector3(b.x * 0.35, 14.0 + Vector2(b.x, b.z).length() * 0.15, 16.0 + b.z * 0.25)
 			camera.position = camera.position.lerp(want_pos, clampf(delta * 2.5, 0.0, 1.0))
 			_cam_look = _cam_look.lerp(b, clampf(delta * 5.0, 0.0, 1.0))
