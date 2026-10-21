@@ -1,32 +1,42 @@
 extends Node
-## Sound effects and the crowd. Every file in audio/ is synthesized by
-## tools/make_audio.py.
+## Sound effects, the crowd and the brass band. Every file in audio/ is
+## synthesized by tools/make_audio.py.
 ##
 ## Godot concept: an AudioStreamPlayer plays one sound at a time, so a small
-## pool of them lets sounds overlap (the bat's tock and the crowd's cheer).
+## pool of them lets sounds overlap (the bat's tock, the crowd's cheer and
+## the trumpet all at once).
 
-const SFX_NAMES := ["tock", "edge", "pad", "stumps", "cheer", "roar", "ooh", "groan", "click"]
+const SFX_NAMES := ["tock", "tock_soft", "edge", "pad", "stumps", "helmet", "click", "ooh", "aah",
+	"groan", "howzat", "cheer", "roar", "applause", "duck", "sad_trombone", "slide_up", "slide_down",
+	"record_scratch", "coo", "four", "six", "win", "ding"]
 
 var _sfx := {}
 var _pool: Array[AudioStreamPlayer] = []
 var _murmur: AudioStreamPlayer
+var _music: AudioStreamPlayer
 
 
 func _ready() -> void:
 	for n in SFX_NAMES:
 		_sfx[n] = load("res://audio/sfx/%s.wav" % n)
-	for i in 8:
+	for i in 10:
 		var p := AudioStreamPlayer.new()
 		add_child(p)
 		_pool.append(p)
-	_murmur = AudioStreamPlayer.new()
-	var w: AudioStreamWAV = load("res://audio/loops/murmur.wav")
+	_murmur = _looping("res://audio/loops/murmur.wav", -16.0)
+	_music = _looping("res://audio/music/brass_band.wav", -9.0)
+
+
+func _looping(path: String, db: float) -> AudioStreamPlayer:
+	var p := AudioStreamPlayer.new()
+	var w: AudioStreamWAV = load(path)
 	w.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	w.loop_begin = 0
 	w.loop_end = int(round(w.get_length() * w.mix_rate))
-	_murmur.stream = w
-	_murmur.volume_db = -16.0
-	add_child(_murmur)
+	p.stream = w
+	p.volume_db = db
+	add_child(p)
+	return p
 
 
 func crowd(on: bool) -> void:
@@ -36,7 +46,17 @@ func crowd(on: bool) -> void:
 		_murmur.stop()
 
 
-func play(sound: String, volume_db := 0.0, pitch := 1.0) -> void:
+func music(on: bool) -> void:
+	if on and not _music.playing:
+		_music.play()
+	elif not on:
+		_music.stop()
+
+
+func play(sound: String, volume_db := 0.0, pitch := 1.0, delay := 0.0) -> void:
+	if delay > 0.0:
+		get_tree().create_timer(delay).timeout.connect(func() -> void: play(sound, volume_db, pitch))
+		return
 	var p := _pool[0]
 	for c in _pool:
 		if not c.playing:

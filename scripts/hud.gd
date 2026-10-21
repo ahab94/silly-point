@@ -25,6 +25,7 @@ const ORANGE := Color(1.0, 0.6, 0.15)
 const BALL_RED := Color(0.72, 0.08, 0.08)
 
 var show_touch := false
+var mirror := false        # bowler's-end camera: the off side is on the left
 
 var _score: Label
 var _goal: Label
@@ -247,7 +248,7 @@ func _draw() -> void:
 		if _cond_data.rev:
 			draw_string(get_theme_default_font(), Vector2(x0 + 200, y0 + 14), "REVERSING", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, ORANGE)
 	if _ballcam_t > 0.0 and not _ballcam.is_empty():
-		_draw_ball_cam(Vector2(s.x * 0.5, 120.0), 52.0)
+		_draw_ball_cam(Vector2(90.0, 240.0), 52.0)   # left side, clear of the batter and slips
 	if _timing_t > 0.0:
 		_draw_timing(Vector2(s.x * 0.5, s.y - 150.0))
 	if _snick_t > 0.0 and _snick >= 0.0:
@@ -275,8 +276,9 @@ func _draw_ball_cam(c: Vector2, r: float) -> void:
 	var spin: bool = d.style == "offspin" or d.style == "legspin"
 	if not spin:
 		# Shiny half bright and glossy, rough half dull and scuffed.
-		var shiny: int = d.shiny_side
-		var tilt := deg_to_rad(28.0) * float(d.seam_dir)
+		var flip := -1 if mirror else 1
+		var shiny: int = int(d.shiny_side) * flip
+		var tilt := deg_to_rad(28.0) * float(d.seam_dir) * flip
 		var seam_dir := Vector2(sin(tilt), -cos(tilt))
 		var across := Vector2(seam_dir.y, -seam_dir.x) * -1.0    # points to +x when tilt is 0
 		draw_circle(c, r, BALL_RED.darkened(0.35))
@@ -294,10 +296,10 @@ func _draw_ball_cam(c: Vector2, r: float) -> void:
 			var off := across * float(-shiny) * r * (0.2 + 0.09 * k) + seam_dir * r * (0.5 - 0.15 * k)
 			draw_line(c + off, c + off + Vector2(6, 3), Color(0.35, 0.15, 0.1), 2.0)
 		draw_line(c - seam_dir * r, c + seam_dir * r, CREAM, 4.0)
-		_text(c + Vector2(-110, r + 32), "SHINY SIDE %s" % ("OFF" if shiny > 0 else "LEG"), 18, GOLD, 220, HORIZONTAL_ALIGNMENT_CENTER)
+		_text(c + Vector2(-110, r + 32), "SHINY SIDE %s" % ("OFF" if int(d.shiny_side) > 0 else "LEG"), 18, GOLD, 220, HORIZONTAL_ALIGNMENT_CENTER)
 	else:
 		draw_circle(c, r, BALL_RED)
-		var sd: int = d.spin_dir
+		var sd: int = int(d.spin_dir) * (-1 if mirror else 1)
 		draw_line(c + Vector2(0, -r), c + Vector2(0, r), CREAM, 4.0)
 		if sd != 0:
 			# Arrow curling the way it will turn.
@@ -309,7 +311,7 @@ func _draw_ball_cam(c: Vector2, r: float) -> void:
 			draw_polyline(pts, GOLD, 5.0)
 			var tip_p := pts[pts.size() - 1]
 			draw_circle(tip_p, 7.0, GOLD)
-			_text(c + Vector2(-110, r + 32), "TURNS TO %s" % ("OFF" if sd > 0 else "LEG"), 18, GOLD, 220, HORIZONTAL_ALIGNMENT_CENTER)
+			_text(c + Vector2(-110, r + 32), "TURNS TO %s" % ("OFF" if int(d.spin_dir) > 0 else "LEG"), 18, GOLD, 220, HORIZONTAL_ALIGNMENT_CENTER)
 		else:
 			draw_circle(c, r * 0.3, CREAM)
 			_text(c + Vector2(-110, r + 32), "STRAIGHT ON", 18, GOLD, 220, HORIZONTAL_ALIGNMENT_CENTER)
@@ -512,7 +514,7 @@ func _build_menu() -> void:
 	_menu_grid.add_theme_constant_override("v_separation", 8)
 	v.add_child(_menu_grid)
 	var help := Label.new()
-	help.text = "W A S D (or arrows): shot direction and footwork   |   J defend   K ground shot   L lofted   I sweep\nNo key: leave it   |   Shift: charge down the pitch   |   R: review   |   Esc: menu"
+	help.text = "W A S D (or arrows): shot direction and footwork   |   J defend   K ground shot   L lofted   I sweep\nNo key: leave it   |   Shift: charge down the pitch   |   R: review   |   C: camera   |   Esc: menu"
 	help.add_theme_font_size_override("font_size", 16)
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(help)
@@ -545,7 +547,7 @@ func show_menu(levels: Array, best: Dictionary) -> void:
 
 ## A virtual 8-way stick on the left (direction and footwork) and shot
 ## buttons on the right. They press the same input actions as the keys.
-const TOUCH_SHOTS := [["shot_defend", "BLOCK"], ["shot_attack", "HIT"], ["shot_loft", "LOFT"], ["shot_sweep", "SWEEP"], ["dance", "CHARGE"]]
+const TOUCH_SHOTS := [["shot_defend", "BLOCK"], ["shot_attack", "HIT"], ["shot_loft", "LOFT"], ["shot_sweep", "SWEEP"], ["dance", "CHARGE"], ["camera", "CAM"]]
 var _stick_center := Vector2.ZERO
 var _stick_touch := -1
 var _stick_vec := Vector2.ZERO

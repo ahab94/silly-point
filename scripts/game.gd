@@ -28,6 +28,10 @@ const SAVE_PATH := "user://progress.cfg"
 const BALL_VISUAL_R := 0.05      # drawn a little bigger than life so you can see it
 const BAT_CAM_POS := Vector3(0.55, 2.75, 5.0)
 const BAT_CAM_LOOK := Vector3(-0.05, 0.45, -12.0)
+# The TV view: a long lens from high behind the bowler's end.
+const BOWL_CAM_POS := Vector3(0.0, 9.0, -62.0)
+const BOWL_CAM_LOOK := Vector3(-0.1, 0.5, -4.5)
+const BOWL_CAM_FOV := 10.5
 
 enum Phase { MENU, INTRO, PRE, RUNUP, FLIGHT, PLAY, DECIDE, REVIEW, DRS, BETWEEN, END }
 
@@ -38,6 +42,7 @@ var level: Dictionary = {}
 var cond
 var rng := RandomNumberGenerator.new()
 var save_enabled := true
+var cam_mode := "bowler"           # "bowler" (TV view from the bowler's end) or "batter"
 var best_stars := {}
 
 # Scene pieces
@@ -80,6 +85,7 @@ var danced := false
 var flight_end := 0.0
 var play_t := 0.0
 var was_out := false
+var batter_runs := 0                 # this batter's score (out for 0 is a duck)
 var _decision_shown := false
 var _bot_plan: Dictionary = {}
 var _since_release := 0.0
@@ -137,7 +143,7 @@ func _setup_input() -> void:
 		"shot_defend": [KEY_J, KEY_Z, KEY_SPACE], "shot_attack": [KEY_K, KEY_X],
 		"shot_loft": [KEY_L, KEY_C], "shot_sweep": [KEY_I, KEY_V],
 		"dance": [KEY_SHIFT], "review": [KEY_R], "confirm": [KEY_ENTER, KEY_KP_ENTER],
-		"menu": [KEY_ESCAPE],
+		"menu": [KEY_ESCAPE], "camera": [KEY_C],
 	}
 	for action in keys:
 		if not InputMap.has_action(action):
@@ -156,6 +162,8 @@ func _parse_flags() -> void:
 
 
 func _load_progress() -> void:
+	if _flags.has("camera"):
+		cam_mode = String(_flags.camera)
 	if _flags.has("no-save"):
 		save_enabled = false
 		return
@@ -163,6 +171,8 @@ func _load_progress() -> void:
 	if cf.load(SAVE_PATH) == OK:
 		for i in Levels.count():
 			best_stars[i] = int(cf.get_value("stars", str(i), 0))
+		if not _flags.has("camera"):
+			cam_mode = String(cf.get_value("settings", "camera", cam_mode))
 
 
 func _save_progress() -> void:
@@ -171,6 +181,7 @@ func _save_progress() -> void:
 	var cf := ConfigFile.new()
 	for i in best_stars:
 		cf.set_value("stars", str(i), best_stars[i])
+	cf.set_value("settings", "camera", cam_mode)
 	cf.save(SAVE_PATH)
 
 
@@ -280,6 +291,8 @@ func _build_world(l: Dictionary) -> void:
 func show_menu() -> void:
 	phase = Phase.MENU
 	sound.crowd(false)
+	if not _muted():
+		sound.music(true)
 	hud.show_menu(Levels.LEVELS, best_stars)
 	_set_bat_cam()
 
@@ -302,6 +315,7 @@ func start_level(i: int) -> void:
 	cond.abrasive = level.abrasive
 	rng.seed = int(_flags.get("seed", level.seed))
 	runs = 0
+	batter_runs = 0
 	wkts = 0
 	balls = 0
 	reviews = 2
@@ -313,7 +327,8 @@ func start_level(i: int) -> void:
 	hud.set_play_visible(true)
 	hud.tip(level.tip)
 	hud.commentary(level.blurb)
-	if not _flags.has("mute"):
+	sound.music(false)
+	if not _muted():
 		sound.crowd(true)
 	_new_ball()
 
@@ -341,6 +356,8 @@ func _new_ball() -> void:
 		cond.take_new_ball()
 		hud.commentary(Commentary.line("new_ball", rng))
 		hud.flash("NEW BALL", "Shiny again: back to conventional swing", Color(1, 0.85, 0.3))
+		if not _muted():
+			sound.play("ding", -6.0)
 	d = Bowling.make(bowler, cond, rng)
 	traj = BallSim.simulate(d)
 	inp = {}
@@ -435,6 +452,9 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("camera"):
+		_toggle_camera()
+		return
 	if event.is_action_pressed("menu") and phase != Phase.MENU:
 		show_menu()
 		return
@@ -465,8 +485,13 @@ func _unhandled_input(event: InputEvent) -> void:
 					_take_shot(s, _held_dir(), t if phase == Phase.FLIGHT else 0.0)
 
 
+## Direction held, in field terms (+x off side, +y towards the bowler).
+## From the bowler's end the off side is on the left of the screen, so
+## left and right swap to match what you see.
 func _held_dir() -> Vector2i:
 	var x := int(Input.is_action_pressed("dir_right")) - int(Input.is_action_pressed("dir_left"))
+	if cam_mode == "bowler":
+		x = -x
 	var y := int(Input.is_action_pressed("dir_up")) - int(Input.is_action_pressed("dir_down"))
 	return Vector2i(x, y)
 
@@ -581,7 +606,10 @@ func _flight(delta: float) -> void:
 func _show_ball(p: Vector3) -> void:
 	ball.position = p
 	# Grow the ball with distance so it never shrinks to a pixel.
-	ball.scale = Vector3.ONE * clampf(camera.global_position.distance_to(p) / 14.0, 1.0, 6.0)
+	# With a long lens (narrow fov) things look bigger, so scale by how much
+	# of the view the distance takes up, not by the distance alone.
+	var spread := camera.global_position.distance_to(p) * tan(deg_to_rad(camera.fov * 0.5))
+	ball.scale = Vector3.ONE * clampf(spread / 6.5, 1.3, 6.0)
 	ball_shadow.position = Vector3(p.x, 0.004, p.z)
 
 
@@ -607,32 +635,62 @@ func _begin_play() -> void:
 
 
 func _impact_sound() -> void:
-	if _flags.has("mute"):
+	if _muted():
 		return
 	var c: String = bat.contact
 	if c == "middle" or c == "glove":
-		# Sweeter and louder the better you time it.
-		sound.play("tock", lerpf(-8.0, 0.0, float(bat.quality)), lerpf(0.9, 1.08, float(bat.quality)))
+		# Sweeter and louder the better you time it; a block is a soft tap.
+		var q := float(bat.quality)
+		if inp.shot == "defend":
+			sound.play("tock_soft", -4.0, randf_range(0.95, 1.05))
+		else:
+			sound.play("tock", lerpf(-8.0, 0.0, q), lerpf(0.9, 1.08, q))
 	elif c in Rules.CONTACTS:
 		sound.play("edge", -3.0)
+	elif bat.helmet:
+		sound.play("helmet", -2.0)
 	elif bat.pad or bat.body:
 		sound.play("pad", -2.0)
 	if bat.bowled or bat.played_on or bat.hit_wicket:
 		sound.play("stumps", 0.0)
+	# Anything that might be out gets a big appeal from the fielders.
+	if out_o.dismissal in ["lbw", "caught_behind"]:
+		sound.play("howzat", -3.0, randf_range(0.95, 1.05), 0.25)
 
 
+func _muted() -> bool:
+	return _flags.has("mute")
+
+
+## The crowd, and the comedy: a quacking duck for nought, a sad trombone for
+## other wickets, a brass band for boundaries, a slide whistle for sixes.
 func _crowd_sound(out: bool) -> void:
-	if _flags.has("mute"):
+	if _muted():
 		return
 	var o := out_o
 	if out:
-		sound.play("groan", -4.0)
+		sound.play("groan", -6.0)
+		if batter_runs == 0:
+			sound.play("duck", -1.0, 1.0, 0.5)
+		else:
+			sound.play("sad_trombone", -3.0, 1.0, 0.4)
 	elif int(o.runs) == 6:
-		sound.play("roar", -2.0)
+		sound.play("six", -2.0)
+		sound.play("roar", -4.0, 1.0, 0.3)
 	elif int(o.runs) == 4:
-		sound.play("cheer", -3.0)
-	elif o.comment in ["beaten", "dropped", "edge_safe", "not_out_pad"]:
-		sound.play("ooh", -5.0)
+		sound.play("four", -2.0)
+		sound.play("cheer", -5.0, 1.0, 0.15)
+	elif o.comment == "dropped":
+		sound.play("slide_down", -3.0)
+		sound.play("groan", -5.0, 1.0, 0.2)
+	elif o.comment in ["beaten", "not_out_pad"]:
+		sound.play("ooh", -4.0)
+	elif o.comment == "edge_safe":
+		sound.play("aah", -4.0)
+	elif int(o.runs) >= 2:
+		sound.play("applause", -10.0)
+	elif o.comment in ["dot", "leave"] and randf() < 0.1:
+		sound.play("coo", -8.0, randf_range(0.9, 1.1))    # a pigeon wanders across
 
 
 func _contact_word(c: String) -> String:
@@ -843,6 +901,8 @@ func _show_tracking(fielding_side: bool) -> void:
 		hud.snicko(float(o.snick) if o.snick > 0.0 else 0.0)
 		hud.show_drs([["Edge", "SPIKE" if o.truth_out else "NOTHING"]], "")
 	hud.flash("REVIEW", "Fielding side" if fielding_side else "Batter reviews", Color(0.6, 0.85, 1.0), 2.5)
+	if not _muted():
+		sound.play("coo", -4.0)     # Pigeon-Eye is on the case
 
 
 func _players_visible(on: bool) -> void:
@@ -860,6 +920,9 @@ func _finish_review() -> void:
 		out = o.truth_out
 		if not out:
 			verdict = "OVERTURNED: NOT OUT (review kept)"
+			if not _muted():
+				sound.play("record_scratch", -3.0)
+				sound.play("aah", -6.0, 1.0, 0.3)
 			reviews += 1      # a successful review isn't lost
 			hud.commentary(Commentary.line("overturned", rng))
 		elif o.track.get("umpires_call", false):
@@ -872,6 +935,8 @@ func _finish_review() -> void:
 	else:
 		out = true
 		verdict = "OVERTURNED: OUT"
+		if not _muted():
+			sound.play("record_scratch", -3.0)
 		_umpire_finger(true)
 	if o.dismissal == "lbw":
 		var tr: Dictionary = o.track
@@ -891,7 +956,7 @@ func _apply(out: bool) -> void:
 	if out:
 		wkts += 1
 		symbol = "W"
-		hud.flash("OUT!", Rules.how_out(o.dismissal), Color(1, 0.35, 0.3))
+		hud.flash("OUT!", Rules.how_out(o.dismissal) + (" ... for a DUCK!" if batter_runs == 0 else ""), Color(1, 0.35, 0.3))
 		if not _decision_shown or o.comment != "lbw":
 			hud.commentary(Commentary.line(o.comment, rng))
 		_batter_trudge()
@@ -919,6 +984,7 @@ func _apply(out: bool) -> void:
 		hud.commentary(Commentary.line("no_ball", rng))
 	strip.append(symbol)
 	_crowd_sound(out)
+	batter_runs = 0 if out else batter_runs + int(o.runs)
 	free_hit = bool(o.free_hit_next) or (free_hit and not o.legal)
 	last_ball = "%d kph %s" % [int(float(d.speed) * 3.6), d.label]
 	cond.overs += 1.0 / 6.0 if o.legal else 0.0
@@ -988,6 +1054,9 @@ func _end(win: bool) -> void:
 		best_stars[level_index] = stars
 		_save_progress()
 	hud.show_result(win, stars, title, summary, level_index + 1 < Levels.count())
+	if not _muted():
+		sound.crowd(false)
+		sound.play("win" if win else "sad_trombone", -2.0, 1.0, 0.4)
 	if _flags.has("exit-on-end"):
 		print("RESULT level=%d %s runs=%d/%d balls=%d stars=%d" % [level_index, "won" if win else "lost", runs, wkts, balls, stars])
 		get_tree().quit(0)
@@ -1100,9 +1169,25 @@ func _batter_trudge() -> void:
 
 
 func _set_bat_cam() -> void:
-	camera.position = BAT_CAM_POS
-	_cam_look = BAT_CAM_LOOK
+	if cam_mode == "bowler":
+		camera.fov = BOWL_CAM_FOV
+		camera.position = BOWL_CAM_POS
+		_cam_look = BOWL_CAM_LOOK
+	else:
+		camera.fov = 50.0
+		camera.position = BAT_CAM_POS
+		_cam_look = BAT_CAM_LOOK
 	camera.look_at(_cam_look)
+	if hud:
+		hud.mirror = cam_mode == "bowler"
+
+
+func _toggle_camera() -> void:
+	cam_mode = "batter" if cam_mode == "bowler" else "bowler"
+	_save_progress()
+	if phase in [Phase.PRE, Phase.RUNUP, Phase.FLIGHT, Phase.MENU, Phase.INTRO, Phase.BETWEEN, Phase.END]:
+		_set_bat_cam()
+	hud.flash("CAMERA", "Bowler's end (TV)" if cam_mode == "bowler" else "Behind the batter", Color(0.8, 0.9, 1.0), 1.0)
 
 
 func _update_camera(delta: float) -> void:
@@ -1112,6 +1197,7 @@ func _update_camera(delta: float) -> void:
 	if hit and ((phase == Phase.PLAY and play_t > 0.45) or phase == Phase.DECIDE):
 		var b := ball.position
 		if Vector2(b.x, b.z + 1.0).length() > 6.0:
+			camera.fov = lerpf(camera.fov, 50.0, clampf(delta * 3.0, 0.0, 1.0))
 			var want_pos := Vector3(b.x * 0.35, 14.0 + Vector2(b.x, b.z).length() * 0.15, 16.0 + b.z * 0.25)
 			camera.position = camera.position.lerp(want_pos, clampf(delta * 2.5, 0.0, 1.0))
 			_cam_look = _cam_look.lerp(b, clampf(delta * 5.0, 0.0, 1.0))
