@@ -297,7 +297,7 @@ def murmur(seconds=8.0):
 
 def air_horn():
     """The stadium horn: a brassy three-note chord with a little droop."""
-    return layer(*[vibrato(f, 0.75, 0.22, 0.004, 6, shape="square", glide_to=f * 0.985, lowpass=2600, attack=0.015)
+    return layer(*[vibrato(f, 0.5, 0.14, 0.004, 6, shape="square", glide_to=f * 0.985, lowpass=1700, attack=0.03)
                    for f in (233.0, 293.7, 349.2)])
 
 
@@ -305,12 +305,12 @@ def drum_hit():
     """A big stadium drum hit with a crash."""
     return layer(tone(110, 0.5, "sine", 0.9, attack=0.002, decay=0.12, glide_to=45),
                  noise(0.08, 0.5, decay=0.03, lowpass=3000, seed=33),
-                 noise(1.2, 0.35, decay=0.45, highpass=5000, seed=34))
+                 noise(0.8, 0.15, decay=0.3, highpass=5000, seed=34))
 
 
 def fanfare_four():
     """Boundary: drum hit, the horn, and a cheer."""
-    return layer(drum_hit(), at(0.05, air_horn()), at(0.15, [s * 0.6 for s in cheer()]))
+    return layer([s * 0.7 for s in drum_hit()], at(0.05, air_horn()), at(0.15, [s * 0.4 for s in cheer()]))
 
 
 def fanfare_six():
@@ -318,9 +318,9 @@ def fanfare_six():
     beat = 0.12
     mel = [("C5", 1), ("E5", 1), ("G5", 1), ("C6", 3)]
     low = [("E4", 1), ("G4", 1), ("C5", 1), ("E5", 3)]
-    return layer(slide_up(), at(0.55, drum_hit()), at(0.55, air_horn()),
-                 at(0.65, tune(mel, beat, trumpet, 0.35)), at(0.65, tune(low, beat, trumpet, 0.2)),
-                 at(0.6, [s * 0.6 for s in roar()]))
+    return layer([s * 0.7 for s in slide_up()], at(0.55, [s * 0.7 for s in drum_hit()]), at(0.55, air_horn()),
+                 at(0.65, tune(mel, beat, trumpet, 0.22)), at(0.65, tune(low, beat, trumpet, 0.13)),
+                 at(0.6, [s * 0.4 for s in roar()]))
 
 
 def kazoo(note, dur, vol):

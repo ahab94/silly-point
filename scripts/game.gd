@@ -359,7 +359,7 @@ func _new_ball() -> void:
 		hud.commentary(Commentary.line("new_ball", rng))
 		hud.flash("NEW BALL", "Shiny again: back to conventional swing", Color(1, 0.85, 0.3))
 		if not _muted():
-			sound.play("ding", -6.0)
+			sound.play("ding", -10.0)
 	d = Bowling.make(bowler, cond, rng)
 	traj = BallSim.simulate(d)
 	inp = {}
@@ -673,20 +673,20 @@ func _impact_sound() -> void:
 		# Sweeter and louder the better you time it; a block is a soft tap.
 		var q := float(bat.quality)
 		if inp.shot == "defend":
-			sound.play("tock_soft", -4.0, randf_range(0.95, 1.05))
+			sound.play("tock_soft", -8.0, randf_range(0.95, 1.05))
 		else:
-			sound.play("tock", lerpf(-8.0, 0.0, q), lerpf(0.9, 1.08, q))
+			sound.play("tock", lerpf(-11.0, -4.0, q), lerpf(0.9, 1.08, q))
 	elif c in Rules.CONTACTS:
-		sound.play("edge", -3.0)
+		sound.play("edge", -6.0)
 	elif bat.helmet:
-		sound.play("helmet", -2.0)
+		sound.play("helmet", -6.0)
 	elif bat.pad or bat.body:
-		sound.play("pad", -2.0)
+		sound.play("pad", -5.0)
 	if bat.bowled or bat.played_on or bat.hit_wicket:
-		sound.play("stumps", 0.0)
+		sound.play("stumps", -4.0)
 	# Anything that might be out gets a big appeal from the fielders.
 	if out_o.dismissal in ["lbw", "caught_behind"]:
-		sound.play("howzat", -6.0, randf_range(0.95, 1.05), 0.25)
+		sound.play("howzat", -11.0, randf_range(0.95, 1.05), 0.25)
 
 
 ## Dev flag --log-events: timestamped moments, for cutting videos.
@@ -706,24 +706,24 @@ func _crowd_sound(out: bool) -> void:
 		return
 	var o := out_o
 	if out:
-		sound.play("groan", -9.0)
+		sound.play("groan", -14.0)
 		if batter_runs == 0:
-			sound.play("duck", -1.0, 1.0, 0.5)
+			sound.play("duck", -5.0, 1.0, 0.5)
 		else:
-			sound.play("sad_trombone", -3.0, 1.0, 0.4)
+			sound.play("sad_trombone", -8.0, 1.0, 0.4)
 	elif int(o.runs) == 6:
-		sound.play("six", -3.0)       # slide whistle, horn, fanfare and crowd in one
+		sound.play("six", -8.0)       # slide whistle, horn, fanfare and crowd in one
 	elif int(o.runs) == 4:
-		sound.play("four", -3.0)      # drum, horn and a cheer
+		sound.play("four", -8.0)      # drum, horn and a cheer
 	elif o.comment == "dropped":
-		sound.play("slide_down", -3.0)
-		sound.play("groan", -5.0, 1.0, 0.2)
+		sound.play("slide_down", -8.0)
+		sound.play("groan", -13.0, 1.0, 0.2)
 	elif o.comment in ["beaten", "not_out_pad"]:
-		sound.play("ooh", -8.0)
+		sound.play("ooh", -13.0)
 	elif o.comment == "edge_safe":
-		sound.play("aah", -8.0)
+		sound.play("aah", -13.0)
 	elif o.comment in ["dot", "leave"] and randf() < 0.1:
-		sound.play("coo", -8.0, randf_range(0.9, 1.1))    # a pigeon wanders across
+		sound.play("coo", -12.0, randf_range(0.9, 1.1))    # a pigeon wanders across
 
 
 func _contact_word(c: String) -> String:
@@ -979,7 +979,7 @@ func _show_tracking(fielding_side: bool) -> void:
 		hud.commentary("Over to the Snick-o-Scope... any sound as it passed the bat?")
 	hud.flash("REVIEW", "Fielding side" if fielding_side else "Batter reviews", Color(0.6, 0.85, 1.0), 2.5)
 	if not _muted():
-		sound.play("coo", -4.0)     # Pigeon-Eye is on the case
+		sound.play("coo", -9.0)     # Pigeon-Eye is on the case
 
 
 func _players_visible(on: bool) -> void:
@@ -999,8 +999,8 @@ func _finish_review() -> void:
 		if not out:
 			verdict = "OVERTURNED: NOT OUT (review kept)"
 			if not _muted():
-				sound.play("record_scratch", -3.0)
-				sound.play("aah", -6.0, 1.0, 0.3)
+				sound.play("record_scratch", -8.0)
+				sound.play("aah", -13.0, 1.0, 0.3)
 			reviews += 1      # a successful review isn't lost
 			hud.commentary(Commentary.line("overturned", rng))
 		elif o.track.get("umpires_call", false):
@@ -1014,7 +1014,7 @@ func _finish_review() -> void:
 		out = true
 		verdict = "OVERTURNED: OUT"
 		if not _muted():
-			sound.play("record_scratch", -3.0)
+			sound.play("record_scratch", -8.0)
 		_umpire_finger(true)
 	_event("verdict %s" % verdict.to_lower().replace(" ", "_").replace(":", ""))
 	if o.dismissal == "lbw":
@@ -1150,7 +1150,7 @@ func _end(win: bool) -> void:
 	hud.show_result(win, stars, title, summary, level_index + 1 < Levels.count())
 	if not _muted():
 		sound.crowd(false)
-		sound.play("win" if win else "sad_trombone", -2.0, 1.0, 0.4)
+		sound.play("win" if win else "sad_trombone", -7.0, 1.0, 0.4)
 	if _flags.has("exit-on-end"):
 		print("RESULT level=%d %s runs=%d/%d balls=%d stars=%d" % [level_index, "won" if win else "lost", runs, wkts, balls, stars])
 		get_tree().quit(0)
