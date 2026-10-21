@@ -27,13 +27,13 @@ const FIELDS := {
 		["Fine leg", -155.0, 56.0], ["Midwicket", -50.0, 28.0],
 	],
 	"spin_attack": [
-		["Wicketkeeper", 160.0, 1.3], ["Slip", 165.0, 2.8], ["Short leg", -100.0, 3.4],
+		["Wicketkeeper", 140.0, 1.5], ["Slip", 165.0, 2.8], ["Short leg", -100.0, 3.4],
 		["Silly point", 95.0, 3.2], ["Mid-off", 14.0, 26.0], ["Mid-on", -14.0, 26.0],
 		["Cover", 52.0, 26.0], ["Midwicket", -58.0, 27.0], ["Deep square leg", -95.0, 56.0],
 		["Point", 92.0, 26.0],
 	],
 	"spin_defend": [
-		["Wicketkeeper", 160.0, 1.3], ["Long-off", 10.0, 59.0], ["Long-on", -12.0, 59.0],
+		["Wicketkeeper", 140.0, 1.5], ["Long-off", 10.0, 59.0], ["Long-on", -12.0, 59.0],
 		["Deep midwicket", -60.0, 57.0], ["Deep square leg", -98.0, 57.0], ["Deep cover", 50.0, 58.0],
 		["Point", 92.0, 26.0], ["Mid-off", 18.0, 25.0], ["Mid-on", -18.0, 25.0],
 		["Short fine leg", -150.0, 18.0],

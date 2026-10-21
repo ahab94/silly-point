@@ -500,7 +500,7 @@ def build(v, tmp):
     cues = [(t + offset, name, vol) for t, name, vol in
             [(c[0], c[1], c[2] if len(c) > 2 else 1.0) for c in v.get("sfx", [])]]
     if v.get("caption_pop", True):
-        cues += [(t0 + offset, "pop", 0.45) for t0, _, text, _ in v["captions"] if text]
+        cues += [(t0 + offset, "pop", 0.3) for t0, _, text, _ in v["captions"] if text]
     if v.get("cut_whoosh"):
         t = offset
         for _, a, b, speed in v["segments"][:-1]:
@@ -508,15 +508,15 @@ def build(v, tmp):
             cues.append((t - 0.15, "whoosh", 0.5))
     base = n_caps + 1
     audio_inputs = ["-stream_loop", "-1", "-i", music_path(v.get("music", "stadium"))]
-    mix = ["[0:a]volume=1.0[g]", f"[{base}:a]volume={v.get('music_volume', 0.3)}[m]"]
+    mix = ["[0:a]volume=1.0[g]", f"[{base}:a]volume={v.get('music_volume', 0.2)}[m]"]
     labels = ["[g]", "[m]"]
     for j, (t, name, vol) in enumerate(cues):
         audio_inputs += ["-i", sfx_path(name)]
         ms = max(0, int(t * 1000))
-        mix.append(f"[{base + 1 + j}:a]adelay={ms}|{ms},volume={vol * 1.2:.2f}[s{j}]")
+        mix.append(f"[{base + 1 + j}:a]adelay={ms}|{ms},volume={vol * 0.75:.2f}[s{j}]")
         labels.append(f"[s{j}]")
     mix.append(f"{''.join(labels)}amix=inputs={len(labels)}:normalize=0:duration=first,atrim=0:{total:.2f},"
-               f"loudnorm=I=-14:TP=-1.5:LRA=11,afade=t=in:d=0.2,afade=t=out:st={total - 0.8:.2f}:d=0.8,"
+               f"loudnorm=I=-16:TP=-2:LRA=11,afade=t=in:d=0.2,afade=t=out:st={total - 0.8:.2f}:d=0.8,"
                f"aresample=48000[a]")
     audio_filter = ";".join(mix)
 
