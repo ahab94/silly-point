@@ -85,7 +85,8 @@ var danced := false
 var flight_end := 0.0
 var play_t := 0.0
 var was_out := false
-var batter_runs := 0                 # this batter's score (out for 0 is a duck)
+var batter_runs := 0
+var _reviewed := false                 # this batter's score (out for 0 is a duck)
 var _decision_shown := false
 var _bot_plan: Dictionary = {}
 var _since_release := 0.0
@@ -373,6 +374,7 @@ func _new_ball() -> void:
 	_place_fielders()
 	_place_bowler(0.0)
 	_keeper_taken = false
+	_reviewed = false
 	_defl = {}
 	bowler_fig.set_pose(Strokes.ready_pose(Vector3(0, 0, 1), 0.0))
 	umpire_fig.set_pose(Strokes.umpire_pose(false))
@@ -430,7 +432,8 @@ func _process(delta: float) -> void:
 		Phase.PLAY:
 			_play(delta)
 		Phase.DECIDE:
-			if phase_t > 1.3:
+			# Only linger when there's a decision to make.
+			if phase_t > (1.3 if out_o.get("dismissal", "") != "" else 0.35):
 				_decide()
 		Phase.REVIEW:
 			if _bot and phase_t > 0.4:
@@ -442,7 +445,8 @@ func _process(delta: float) -> void:
 			if phase_t > 3.2:
 				_finish_review()
 		Phase.BETWEEN:
-			if phase_t > (1.6 if was_out else 1.1):
+			# Linger after a wicket or a review so the verdict can be read.
+			if phase_t > (2.2 if _reviewed else (1.6 if was_out else 1.1)):
 				_after_ball()
 	if phase >= Phase.FLIGHT and phase != Phase.END:
 		_since_release += delta
@@ -899,7 +903,8 @@ func _show_tracking(fielding_side: bool) -> void:
 		hud.show_drs([["Pitching", tr.pitching], ["Impact", tr.impact], ["Wickets", tr.wickets]], "")
 	else:
 		hud.snicko(float(o.snick) if o.snick > 0.0 else 0.0)
-		hud.show_drs([["Edge", "SPIKE" if o.truth_out else "NOTHING"]], "")
+		hud.show_drs([["Edge", "SPIKE" if o.truth_out else "NOTHING"]], "", "SNICK-O-SCOPE")
+		hud.commentary("Over to the Snick-o-Scope... any sound as it passed the bat?")
 	hud.flash("REVIEW", "Fielding side" if fielding_side else "Batter reviews", Color(0.6, 0.85, 1.0), 2.5)
 	if not _muted():
 		sound.play("coo", -4.0)     # Pigeon-Eye is on the case
@@ -912,6 +917,7 @@ func _players_visible(on: bool) -> void:
 
 func _finish_review() -> void:
 	var o := out_o
+	_reviewed = true
 	_players_visible(true)
 	_set_bat_cam()
 	var out: bool
@@ -942,7 +948,7 @@ func _finish_review() -> void:
 		var tr: Dictionary = o.track
 		hud.show_drs([["Pitching", tr.pitching], ["Impact", tr.impact], ["Wickets", tr.wickets]], verdict)
 	else:
-		hud.show_drs([["Edge", "SPIKE" if o.truth_out else "NOTHING"]], verdict)
+		hud.show_drs([["Edge", "SPIKE" if o.truth_out else "NOTHING"]], verdict, "SNICK-O-SCOPE")
 	_apply(out)
 
 

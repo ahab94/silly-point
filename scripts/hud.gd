@@ -385,8 +385,8 @@ func _build_drs() -> void:
 	_drs.visible = false
 
 
-func show_drs(rows: Array, verdict: String) -> void:
-	var lines := ["PIGEON-EYE BALL TRACKING"]
+func show_drs(rows: Array, verdict: String, title := "PIGEON-EYE BALL TRACKING") -> void:
+	var lines := [title]
 	for r in rows:
 		lines.append("%-10s %s" % [r[0], r[1]])
 	if verdict != "":
