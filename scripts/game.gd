@@ -18,6 +18,8 @@ const Levels := preload("res://scripts/levels.gd")
 const Commentary := preload("res://scripts/commentary.gd")
 const Stadium := preload("res://scripts/stadium.gd")
 const Figures := preload("res://scripts/figures.gd")
+const Rig := preload("res://scripts/rig.gd")
+const Strokes := preload("res://scripts/strokes.gd")
 const Autopilot := preload("res://scripts/autopilot.gd")
 const Hud := preload("res://scripts/hud.gd")
 const Sound := preload("res://scripts/sound.gd")
@@ -80,6 +82,10 @@ var play_t := 0.0
 var was_out := false
 var _decision_shown := false
 var _bot_plan: Dictionary = {}
+var _since_release := 0.0
+var _defl: Dictionary = {}          # the ball's path after a pad, stumps or the keeper
+var _keeper_taken := false
+var _throw_from := Vector3.ZERO
 var _cam_look := BAT_CAM_LOOK
 
 var _flags := {}
@@ -187,31 +193,39 @@ func _build_world(l: Dictionary) -> void:
 	stadium.set_overcast(bool(l.get("overcast", false)))
 
 	var kit := Color(0.2, 0.35, 0.75) if night else Figures.WHITES
-	batter = Figures.Batter.new()
+	var helmet := Color(0.1, 0.18, 0.4)
+	batter = Rig.new()
 	add_child(batter)
-	batter.build(kit, Figures.SKIN[1], Color(0.1, 0.18, 0.4))
+	batter.build(kit, Figures.SKIN[1], "helmet", helmet, true, true, true)
+	_batter_stance()
 
 	var fkit := Color(0.85, 0.45, 0.1) if night else Figures.WHITES
-	bowler_fig = Figures.person(fkit, Figures.SKIN[0], "none")
+	var cap := Color(0.1, 0.2, 0.45) if not night else Color(0.85, 0.45, 0.1)
+	bowler_fig = Rig.new()
 	add_child(bowler_fig)
-	umpire_fig = Figures.person(Color(0.15, 0.15, 0.2), Figures.SKIN[2], "umpire")
-	var coat := Figures.part(umpire_fig, Figures.capsule(0.2, 0.75), Color(0.95, 0.95, 0.92), Vector3(0, 1.12, 0))
-	coat.scale = Vector3(1.0, 1.0, 0.8)
-	umpire_fig.position = Vector3(0.35, 0.0, -BallSim.PITCH_LENGTH - 2.2)
-	umpire_fig.rotation.y = PI
+	bowler_fig.build(fkit, Figures.SKIN[0], "none", cap)
+	umpire_fig = Rig.new()
 	add_child(umpire_fig)
+	umpire_fig.build(Color(0.94, 0.94, 0.9), Figures.SKIN[2], "umpire", Color.WHITE)
+	umpire_fig.position = Vector3(0.35, 0.0, -BallSim.PITCH_LENGTH - 2.2)
+	umpire_fig.set_pose(Strokes.umpire_pose(false))
 	# The non-striker, backing up at the other end (freed with the stadium).
-	var partner := Figures.Batter.new()
+	var partner := Rig.new()
 	stadium.add_child(partner)
-	partner.build(kit, Figures.SKIN[3], Color(0.1, 0.18, 0.4))
-	partner.set_process(false)
+	partner.build(kit, Figures.SKIN[3], "helmet", helmet, true, true, true)
 	partner.position = Vector3(1.0, 0.0, -BallSim.PITCH_LENGTH + 1.4)
-	partner.rotation.y = PI
+	var pp := Strokes.ready_pose(Vector3(0, 0, 1), 0.1)
+	pp.grip = Vector3(-0.28, 0.8, 0.1)
+	pp.bat = Vector3(0.0, -1.0, 0.15).normalized()
+	pp.batface = Vector3(0, 0, 1)
+	partner.set_pose(pp)
+	partner.look_at_world = Vector3(0, 1.0, 0)
 
 	for i in 11:
-		var f := Figures.person(fkit, Figures.SKIN[i % 4], "cap", Color(0.1, 0.2, 0.45) if not night else Color(0.85, 0.45, 0.1))
+		var f := Rig.new()
 		add_child(f)
 		fielder_figs.append(f)
+		f.build(fkit, Figures.SKIN[i % 4], "cap", cap)
 
 	ball = MeshInstance3D.new()
 	ball.mesh = Figures.sphere(BALL_VISUAL_R)
@@ -222,6 +236,18 @@ func _build_world(l: Dictionary) -> void:
 	bm.emission = bm.albedo_color * 0.25
 	ball.material_override = bm
 	add_child(ball)
+	var seam := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = BALL_VISUAL_R * 0.97
+	torus.outer_radius = BALL_VISUAL_R * 1.06
+	torus.rings = 16
+	torus.ring_segments = 4
+	seam.mesh = torus
+	var seam_mat := StandardMaterial3D.new()
+	seam_mat.albedo_color = Color(0.95, 0.93, 0.85) if not night else Color(0.3, 0.3, 0.3)
+	seam.material_override = seam_mat
+	seam.rotation.z = PI * 0.5
+	ball.add_child(seam)
 	ball_shadow = MeshInstance3D.new()
 	var disc := CylinderMesh.new()
 	disc.top_radius = 0.05
@@ -326,9 +352,13 @@ func _new_ball() -> void:
 	was_out = false
 	t = 0.0
 	stadium.reset_stumps()
-	batter.stance()
+	_batter_stance()
 	_place_fielders()
 	_place_bowler(0.0)
+	_keeper_taken = false
+	_defl = {}
+	bowler_fig.set_pose(Strokes.ready_pose(Vector3(0, 0, 1), 0.0))
+	umpire_fig.set_pose(Strokes.umpire_pose(false))
 	_clear_track()
 	pitch_mark.visible = false
 	ball.visible = false
@@ -373,6 +403,7 @@ func _process(delta: float) -> void:
 		Phase.PRE:
 			if phase_t > 0.7:
 				_set_phase(Phase.RUNUP)
+				_start_runup()
 		Phase.RUNUP:
 			_place_bowler(phase_t / _runup_time())
 			if phase_t >= _runup_time():
@@ -396,6 +427,10 @@ func _process(delta: float) -> void:
 		Phase.BETWEEN:
 			if phase_t > (1.6 if was_out else 1.1):
 				_after_ball()
+	if phase >= Phase.FLIGHT and phase != Phase.END:
+		_since_release += delta
+		_place_bowler(1.0 + _since_release / _runup_time())
+	_update_figures(delta)
 	_update_camera(delta)
 
 
@@ -447,7 +482,7 @@ func _dance() -> void:
 	if phase == Phase.FLIGHT and t > DANCE_WINDOW:
 		return
 	danced = true
-	batter.step("dance", 0.45)
+	_batter_charge()
 	if phase == Phase.RUNUP and rng.randf() < 0.55:
 		var pitch: Vector2 = d.pitch
 		d.pitch = Vector2(pitch.x + rng.randf_range(0.3, 0.55), pitch.y - rng.randf_range(1.2, 2.2))
@@ -460,9 +495,9 @@ func _release() -> void:
 	t = 0.0
 	ball.visible = true
 	ball_shadow.visible = true
-	batter.backlift()
+	batter.play([[0.3, Strokes.backlift(), "inout"]])
 	hud.show_ball_cam(d, 0.55)
-	_swing_arm(bowler_fig)
+	_since_release = 0.0
 	if d.no_ball:
 		hud.flash("NO BALL", "", Color(1, 0.6, 0.15), 1.0)
 	hud.tip("")
@@ -475,14 +510,7 @@ func _take_shot(s: String, dir: Vector2i, at: float) -> void:
 	var m := Batting.from_direction(dir)
 	inp = {"shot": s, "foot": m.foot, "aim": m.aim, "th_adj": m.th_adj, "dance": danced, "t_press": at}
 	_resolve()
-	var foot := Batting.effective_foot(inp)
-	var swing_t: float = Batting.SWING_T[s]
-	if foot != "dance":
-		batter.step("sweep" if s == "sweep" else foot, swing_t)
-	var key: String = bat.get("key", "defend")
-	var sh: Dictionary = Batting.SHOTS.get(key, Batting.SHOTS.defend)
-	var th: float = bat.get("dir_deg", float(sh.th))
-	batter.swing(sh.bat, th, swing_t, s == "defend")
+	_animate_shot()
 
 
 ## No shot: a leave (and a duck if you're holding back).
@@ -493,9 +521,9 @@ func _leave() -> void:
 	_resolve()
 	var p := BallSim.pos_at(traj, BallSim.time_at_z(traj, -0.6))
 	if dir.y < 0 and p.y > 1.1:
-		batter.step("duck", 0.15)
+		batter.play(Strokes.duck())
 	else:
-		batter.shoulder_arms()
+		batter.play(Strokes.leave())
 
 
 func _resolve() -> void:
@@ -529,18 +557,19 @@ func _flight(delta: float) -> void:
 		shot_taken = true
 		inp = {"shot": p.shot, "foot": p.foot, "aim": p.aim, "th_adj": p.th_adj, "dance": danced, "t_press": float(p.t_press)}
 		_resolve()
-		var foot := Batting.effective_foot(inp)
-		var swing_t: float = Batting.SWING_T[p.shot]
-		if foot != "dance":
-			batter.step("sweep" if p.shot == "sweep" else foot, swing_t)
-		var sh: Dictionary = Batting.SHOTS.get(bat.get("key", "defend"), Batting.SHOTS.defend)
-		batter.swing(sh.bat, float(bat.get("dir_deg", float(sh.th))), swing_t, p.shot == "defend")
+		_animate_shot()
 	# Didn't play a shot by the time it reaches you: that's a leave.
 	if not shot_taken and t >= BallSim.time_at_z(traj, Batting.PAD_Z.neutral) - 0.12:
 		_leave()
 	var p3 := BallSim.pos_at(traj, minf(t, flight_end if shot_taken else t))
 	_show_ball(p3)
+	# Seam spinning: backspin for the quicks, sidespin for the spinners.
+	if Bowling.is_spinner(bowler):
+		ball.rotate_object_local(Vector3(0, 0, 1), delta * TAU * 3.0 * (1.0 if int(d.spin_dir) >= 0 else -1.0))
+	else:
+		ball.rotate_object_local(Vector3(1, 0, 0), -delta * TAU * 5.0)
 	if traj.pitch_t > 0.0 and t >= float(traj.pitch_t) and not pitch_mark.visible:
+		_dust((traj.pitch_pos as Vector3), 1.0 if d.crack != "" or d.rough else 0.25)
 		pitch_mark.visible = true
 		pitch_mark.position = Vector3((traj.pitch_pos as Vector3).x, 0.003, (traj.pitch_pos as Vector3).z)
 		if d.crack != "":
@@ -559,13 +588,22 @@ func _show_ball(p: Vector3) -> void:
 func _begin_play() -> void:
 	_set_phase(Phase.PLAY)
 	play_t = 0.0
+	_defl = {}
 	_impact_sound()
 	if bat.bowled or bat.played_on:
 		stadium.knock_stumps(BallSim.pos_at(traj, BallSim.time_at_z(traj, 0.0)).x)
-	if bat.hit_wicket:
+	if bat.hit_wicket or bat.stumped:
 		stadium.knock_stumps(0.0)
 	if bat.contact in Rules.CONTACTS:
 		hud.timing(bat.te, "%s  %s" % [bat.timing, _contact_word(bat.contact)])
+	# Where the ball goes when nobody hits it: off the pad, on through the
+	# broken stumps, or into the keeper's gloves.
+	var vin := BallSim.vel_at(traj, flight_end)
+	var at := BallSim.pos_at(traj, flight_end)
+	if bat.pad or bat.body:
+		_defl = BallSim.simulate_hit(at, Vector3(vin.x * 0.2 + 0.7, absf(vin.y) * 0.15 + 1.1, -vin.z * 0.12), 3.0)
+	elif bat.bowled:
+		_defl = BallSim.simulate_hit(at, vin * 0.3 + Vector3(0, 0.6, 0), 3.0)
 
 
 func _impact_sound() -> void:
@@ -612,32 +650,137 @@ func _play(delta: float) -> void:
 	play_t += delta
 	var fr: Dictionary = out_o.get("field", {})
 	if not fr.is_empty() and not bat.played_on and not bat.hit_wicket:
-		var tt := minf(play_t, float(fr.t_end))
-		_show_ball(BallSim.hit_pos_at(fr.path, tt))
-		for ch in fr.chase:
-			var f: Node3D = fielder_figs[int(ch.i)]
-			var to: Vector2 = ch.to
-			var start: Vector2 = (field[int(ch.i)].pos as Vector2)
-			var k := clampf(play_t / maxf(float(ch.t), 0.1), 0.0, 1.0)
-			var at := start.lerp(to, k)
-			f.position = Vector3(at.x, 0.0, at.y)
-		if fr.result in ["caught", "dropped"] and play_t >= float(fr.t_end) - 0.05:
-			if fr.result == "caught":
-				var f2: Node3D = fielder_figs[int(fr.fielder)]
-				ball.position = f2.position + Vector3(0, 1.3, 0)
-		if play_t >= minf(float(fr.t_end) + 0.7, 6.0):
+		var t_end: float = fr.t_end
+		var result: String = fr.result
+		var thrown := result == "runs" or result == "dropped"
+		var throw_dur := 0.0
+		var catcher: Node3D = fielder_figs[int(fr.fielder)] if int(fr.fielder) >= 0 else null
+		if thrown and catcher:
+			throw_dur = clampf(catcher.position.distance_to(Vector3(0, 0, 1)) / 26.0, 0.25, 2.2)
+		_chase(fr, catcher)
+		if play_t <= t_end or result == "four" or result == "six":
+			_show_ball(BallSim.hit_pos_at(fr.path, play_t))
+		elif result == "caught" and catcher:
+			_show_ball(catcher.hands_world())
+		elif thrown and catcher:
+			# Pick it up, then throw it in to the keeper over the stumps.
+			var since := play_t - t_end
+			if since < 0.35:
+				_throw_from = catcher.hands_world()
+				_show_ball(_throw_from)
+			else:
+				var k := clampf((since - 0.35) / throw_dur, 0.0, 1.0)
+				var to := Vector3(0.1, 0.9, 0.6)
+				var p := _throw_from.lerp(to, k)
+				p.y += sin(k * PI) * minf(_throw_from.distance_to(to) * 0.12, 6.0)
+				_show_ball(p)
+		var done := t_end + 1.0
+		if thrown:
+			done = t_end + 0.35 + throw_dur + 0.3
+		if play_t >= minf(done, 7.0):
 			_set_phase(Phase.DECIDE)
 	else:
-		# Ball stopped at the pad/body, crashed into the stumps, or went
-		# through to the keeper: settle it.
-		if bat.pad or bat.body:
-			var pp: Vector3 = bat.pad_pos
-			_show_ball(pp.lerp(Vector3(pp.x + 0.4, BallSim.RADIUS, pp.z - 1.2), clampf(play_t / 0.6, 0.0, 1.0)))
+		if not _defl.is_empty():
+			_show_ball(BallSim.hit_pos_at(_defl, play_t))
+		elif _keeper_taken:
+			var kf: Node3D = fielder_figs[_keeper_index()]
+			_show_ball(kf.hands_world())
 		else:
-			var tt2 := minf(flight_end + play_t, flight_end + 0.25)
-			_show_ball(BallSim.pos_at(traj, tt2))
-		if play_t > 0.7:
+			_show_ball(BallSim.pos_at(traj, minf(flight_end + play_t, flight_end + 0.25)))
+		if play_t > 0.9:
 			_set_phase(Phase.DECIDE)
+
+
+## Fielders run to the ball (a running gait while they move), then catch it,
+## gather it, or chase it to the rope.
+func _chase(fr: Dictionary, catcher: Node3D) -> void:
+	for ch in fr.chase:
+		var i := int(ch.i)
+		var f: Node3D = fielder_figs[i]
+		var to: Vector2 = ch.to
+		var start: Vector2 = (field[i].pos as Vector2)
+		var k := clampf(play_t / maxf(float(ch.t), 0.1), 0.0, 1.0)
+		var at := start.lerp(to, k)
+		f.position = Vector3(at.x, 0.0, at.y)
+		var move := to - start
+		var state: String = f.get_meta("state", "")
+		if k < 1.0 and move.length() > 0.5:
+			if state != "run":
+				var dir := Vector3(move.x, 0.0, move.y).normalized()
+				var speed := clampf(move.length() / maxf(float(ch.t), 0.1), 2.0, 7.5)
+				f.run_procedural(func(tt: float) -> Dictionary: return Strokes.gait(tt, speed, dir))
+				f.set_meta("state", "run")
+		elif state != "field" and f == catcher:
+			f.set_meta("state", "field")
+			var face := Vector3(-f.position.x, 0.0, -f.position.z).normalized()
+			var ball_local: Vector3 = BallSim.hit_pos_at(fr.path, minf(play_t, float(fr.t_end))) - f.position
+			if fr.result == "caught" or fr.result == "dropped":
+				f.play([[0.12, Strokes.catch_pose(face, ball_local), "out"], [0.6, {}]])
+			else:
+				# Bend to gather it, then throw.
+				var low := Strokes.catch_pose(face, Vector3(ball_local.x, 0.15, ball_local.z))
+				var right := face.cross(Vector3.UP)
+				var wind := Strokes.ready_pose(face, 0.1)
+				wind.rh = right * 0.3 - face * 0.25 + Vector3.UP * 1.75
+				wind.lh = face * 0.5 + Vector3.UP * 1.3
+				var release := Strokes.ready_pose(face, 0.1)
+				release.rh = face * 0.55 + Vector3.UP * 1.2
+				f.play([[0.15, low, "out"], [0.2, wind], [0.15, release, "out"], [0.6, {}]])
+		elif state == "run" and k >= 1.0:
+			f.set_meta("state", "stop")
+			var face2 := Vector3(-f.position.x, 0.0, -f.position.z).normalized()
+			f.play([[0.25, Strokes.ready_pose(face2, 0.2)]])
+
+
+## Heads follow the ball; the keeper takes the ones that go through.
+func _update_figures(_delta: float) -> void:
+	if batter == null or not is_instance_valid(batter):
+		return
+	var target: Vector3 = ball.global_position if ball.visible else bowler_fig.global_position + Vector3(0, 1.6, 0)
+	batter.look_at_world = target
+	umpire_fig.look_at_world = target
+	bowler_fig.look_at_world = target if ball.visible else batter.global_position + Vector3(0, 1.0, 0)
+	for f in fielder_figs:
+		f.look_at_world = target
+	if phase == Phase.FLIGHT and shot_taken and not _keeper_taken and not (bat.contact in Rules.CONTACTS) \
+			and not bat.pad and not bat.body and not bat.bowled and t >= flight_end - 0.3:
+		var ki := _keeper_index()
+		if ki >= 0:
+			_keeper_taken = true
+			var kf: Node3D = fielder_figs[ki]
+			var face := Vector3(-kf.position.x, 0.0, -kf.position.z).normalized()
+			var ball_local: Vector3 = BallSim.pos_at(traj, flight_end) - kf.position
+			kf.play([[0.22, Strokes.catch_pose(face, ball_local), "out"], [0.8, {}]])
+
+
+## A little puff of dust where the ball pitches (more off a crack).
+func _dust(at: Vector3, strength: float) -> void:
+	var p := CPUParticles3D.new()
+	p.one_shot = true
+	p.emitting = false
+	p.amount = int(10 + 20 * strength)
+	p.lifetime = 0.7
+	p.explosiveness = 0.95
+	p.direction = Vector3(0, 1, 0.4)
+	p.spread = 40.0
+	p.initial_velocity_min = 0.6
+	p.initial_velocity_max = 1.6 + 1.5 * strength
+	p.gravity = Vector3(0, -2.5, 0)
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.4
+	var m := SphereMesh.new()
+	m.radius = 0.025
+	m.height = 0.05
+	m.radial_segments = 6
+	m.rings = 3
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.75, 0.66, 0.48)
+	m.material = mat
+	p.mesh = m
+	p.position = at
+	add_child(p)
+	p.emitting = true
+	get_tree().create_timer(1.5).timeout.connect(p.queue_free)
 
 
 ## Shows the umpire's decision, or asks about a review.
@@ -751,7 +894,7 @@ func _apply(out: bool) -> void:
 		hud.flash("OUT!", Rules.how_out(o.dismissal), Color(1, 0.35, 0.3))
 		if not _decision_shown or o.comment != "lbw":
 			hud.commentary(Commentary.line(o.comment, rng))
-		batter.trudge()
+		_batter_trudge()
 	else:
 		_umpire_finger(false)
 		if o.wide:
@@ -867,42 +1010,93 @@ func _update_hud() -> void:
 func _place_fielders() -> void:
 	for i in fielder_figs.size():
 		var f: Node3D = fielder_figs[i]
+		f.set_meta("state", "")
 		if i >= field.size() or field[i].name == "Bowler":
 			f.visible = false
 			continue
 		f.visible = true
 		var p: Vector2 = field[i].pos
 		f.position = Vector3(p.x, 0.0, p.y)
-		f.scale = Vector3(1, 0.72, 1) if field[i].keeper or field[i].close else Vector3.ONE
-		if field[i].keeper and p.y < 3.0:
-			f.scale = Vector3(1, 0.55, 1)    # crouched right behind the stumps
-		f.look_at(Vector3(0.0, 0.0, -1.0), Vector3.UP)   # face the batter
+		var face := Vector3(-p.x, 0.0, -p.y)    # towards the batter
+		var crouch := 0.15
+		if field[i].keeper:
+			crouch = 1.0
+		elif field[i].close:
+			crouch = 0.7
+		f.set_pose(Strokes.ready_pose(face.normalized(), crouch))
 
 
-## Run-up: k goes 0..1 from the top of the mark to the crease.
+func _keeper_index() -> int:
+	for i in field.size():
+		if field[i].keeper:
+			return i
+	return -1
+
+
+## Run-up: k goes 0..1 from the top of the mark to the crease. After the
+## release the bowler carries on a few steps in the follow-through.
 func _place_bowler(k: float) -> void:
 	var spin := Bowling.is_spinner(bowler)
-	var start := -BallSim.PITCH_LENGTH - (6.0 if spin else 14.0)
-	var stop := -BallSim.PITCH_LENGTH + 1.0
-	var z := lerpf(start, stop, clampf(k, 0.0, 1.0))
-	bowler_fig.position = Vector3(-0.3, absf(sin(k * 18.0)) * 0.06, z)
-	bowler_fig.rotation.y = PI
+	var start := -BallSim.PITCH_LENGTH - (4.0 if spin else 8.0)
+	var stop := -BallSim.PITCH_LENGTH + 0.9
+	var z := lerpf(start, stop, pow(clampf(k, 0.0, 1.0), 1.15))
+	if k > 1.0:
+		z = stop + 2.4 * (1.0 - exp(-(k - 1.0) * 2.0))
+	bowler_fig.position = Vector3(-0.3, 0.0, z)
 
 
-func _swing_arm(fig: Node3D) -> void:
-	var arm: Node3D = fig.get_node("ArmR")
-	var tw := create_tween()
-	arm.rotation.x = 0.0
-	tw.tween_property(arm, "rotation:x", -TAU, 0.35)
-	tw.tween_property(arm, "rotation:x", 0.0, 0.01)
-	var follow := create_tween()
-	follow.tween_property(fig, "position:z", fig.position.z + 3.0, 0.6)
+func _start_runup() -> void:
+	var r := _runup_time()
+	var spin := Bowling.is_spinner(bowler)
+	bowler_fig.run_procedural(func(tt: float) -> Dictionary: return Strokes.bowler_pose(tt, r, spin))
 
 
 func _umpire_finger(up: bool) -> void:
-	var arm: Node3D = umpire_fig.get_node("ArmR")
+	umpire_fig.play([[0.3, Strokes.umpire_pose(up), "out"]])
+
+
+# ---------------------------------------------------------------- batter animation
+
+func _batter_stance() -> void:
+	batter.position = Strokes.ROOT
+	batter.set_pose(Strokes.stance())
+
+
+## Down the pitch: a few quick steps, then back into a stance there.
+func _batter_charge() -> void:
+	batter.run_procedural(func(tt: float) -> Dictionary: return Strokes.gait(tt, 5.0, Vector3(0.2, 0, -1)))
 	var tw := create_tween()
-	tw.tween_property(arm, "rotation:x", -PI * 0.92 if up else 0.0, 0.3)
+	tw.tween_property(batter, "position", Strokes.ROOT + Vector3(0.15, 0.0, -2.25), 0.42)
+	tw.tween_callback(func() -> void:
+		if not shot_taken:
+			batter.play([[0.12, Strokes.stance()], [0.1, Strokes.backlift()]]))
+
+
+func _animate_shot() -> void:
+	var s: String = inp.shot
+	var key: String = bat.get("key", "defend")
+	var sh: Dictionary = Batting.SHOTS.get(key, Batting.SHOTS.defend)
+	var th: float = bat.get("dir_deg", float(sh.th))
+	var swing_t: float = maxf(0.08, float(Batting.SWING_T[s]) - (t - float(inp.t_press)))
+	var foot := Batting.effective_foot(inp)
+	var contact: Vector3 = bat.get("bat_pos", Vector3(0.0, 0.5, float(Batting.PLANE[foot])))
+	if bat.contact in Rules.CONTACTS:
+		contact = bat.exit_pos
+	var local: Vector3 = contact - batter.position
+	batter.play(Strokes.shot(key, "front" if foot == "dance" else foot, th, local, swing_t, s == "loft"))
+
+
+func _batter_trudge() -> void:
+	var dir := Vector3(-0.8, 0.0, 0.6).normalized()
+	batter.run_procedural(func(tt: float) -> Dictionary:
+		var g := Strokes.gait(tt, 1.3, dir)
+		g.grip = (g.rh as Vector3) + Vector3(0, 0.05, 0)
+		g.bat = Vector3(0.1, -1, 0.3).normalized()
+		g.batface = dir
+		return g)
+	var tw := create_tween()
+	tw.tween_interval(0.5)
+	tw.tween_property(batter, "position", batter.position + dir * 3.5, 2.6)
 
 
 func _set_bat_cam() -> void:
@@ -914,7 +1108,8 @@ func _set_bat_cam() -> void:
 func _update_camera(delta: float) -> void:
 	# Follow the ball only when it was hit; misses stay in the batter's view.
 	var hit: bool = not out_o.get("field", {}).is_empty() and not bat.get("played_on", false)
-	if hit and (phase == Phase.PLAY or phase == Phase.DECIDE):
+	# Hold the batting view a moment so you see the stroke and follow-through.
+	if hit and ((phase == Phase.PLAY and play_t > 0.45) or phase == Phase.DECIDE):
 		var b := ball.position
 		if Vector2(b.x, b.z + 1.0).length() > 6.0:
 			var want_pos := Vector3(b.x * 0.35, 14.0 + Vector2(b.x, b.z).length() * 0.15, 16.0 + b.z * 0.25)

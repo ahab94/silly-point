@@ -152,6 +152,7 @@ static func resolve(traj: Dictionary, d: Dictionary, inp: Dictionary, c) -> Dict
 		# Slow balls give more time to adjust the bat on the way down.
 		var adjust := ADJUST + 0.25 * clampf((30.0 - float(d.speed)) / 10.0, 0.0, 1.0)
 		var bat := pred + (actual - pred) * adjust
+		r.bat_pos = bat           # where the bat goes (for the animation)
 		var te := t_arr - (t_press + float(SWING_T[shot]))
 		var window: float = WINDOW[shot]
 		r.te = te
