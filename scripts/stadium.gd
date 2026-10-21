@@ -86,7 +86,8 @@ func _build_sky() -> void:
 	sun.rotation_degrees = Vector3(-52.0, 28.0, 0.0)
 	sun.light_energy = 0.45 if night else 0.85
 	sun.light_color = Color(0.85, 0.88, 1.0) if night else Color(1.0, 0.97, 0.9)
-	sun.shadow_enabled = true
+	# Shadows are the costliest thing here; phones go without.
+	sun.shadow_enabled = not (OS.has_feature("web_android") or OS.has_feature("web_ios") or OS.has_feature("mobile"))
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
 

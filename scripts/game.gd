@@ -100,12 +100,20 @@ var _flags := {}
 var _sim_time := 0.0
 var _bot := false
 var _rookie_rng := RandomNumberGenerator.new()
+var _low_power := false
 
 
 func _ready() -> void:
 	_setup_input()
 	_parse_flags()
 	_load_progress()
+	# Phones: a lighter renderer, and a layout size that matches the screen's
+	# shape so text and buttons stay big enough to read and tap.
+	if OS.has_feature("web_android") or OS.has_feature("web_ios") or OS.has_feature("mobile"):
+		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+		_low_power = true
+	get_window().size_changed.connect(_fit_layout)
+	_fit_layout()
 	camera = Camera3D.new()
 	camera.fov = 50.0
 	camera.current = true
@@ -137,6 +145,17 @@ func _ready() -> void:
 
 
 # ---------------------------------------------------------------- setup
+
+## Portrait screens get a 720x1280 layout, landscape ones 1280x720
+## (stretch aspect "expand" grows whichever side is longer).
+func _fit_layout() -> void:
+	var ws := get_window().size
+	var want := Vector2i(720, 1280) if ws.y > ws.x else Vector2i(1280, 720)
+	if get_window().content_scale_size != want:
+		get_window().content_scale_size = want
+	if camera and phase in [Phase.PRE, Phase.RUNUP, Phase.MENU, Phase.INTRO, Phase.BETWEEN, Phase.END]:
+		_set_bat_cam()
+
 
 func _setup_input() -> void:
 	var keys := {

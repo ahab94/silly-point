@@ -45,6 +45,7 @@ var _card_box: VBoxContainer
 var _menu: PanelContainer
 var _menu_grid: GridContainer
 var _touch: Control
+var _help: Label
 
 var _cond_data := {}
 var _ballcam := {}
@@ -248,7 +249,9 @@ func _draw() -> void:
 		if _cond_data.rev:
 			draw_string(get_theme_default_font(), Vector2(x0 + 200, y0 + 14), "REVERSING", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, ORANGE)
 	if _ballcam_t > 0.0 and not _ballcam.is_empty():
-		_draw_ball_cam(Vector2(90.0, 240.0), 52.0)   # left side, clear of the batter and slips
+		# Left side, clear of the batter and slips (right side on tall screens,
+		# where the bowler panel sits under the scoreboard).
+		_draw_ball_cam(Vector2(90.0, 330.0) if size.y > size.x else Vector2(90.0, 240.0), 52.0)
 	if _timing_t > 0.0:
 		_draw_timing(Vector2(s.x * 0.5, s.y - 150.0))
 	if _snick_t > 0.0 and _snick >= 0.0:
@@ -509,19 +512,26 @@ func _build_menu() -> void:
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(sub)
 	_menu_grid = GridContainer.new()
-	_menu_grid.columns = 2
+	_menu_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_menu_grid.columns = 2     # 1 on tall screens (see _layout)
 	_menu_grid.add_theme_constant_override("h_separation", 12)
 	_menu_grid.add_theme_constant_override("v_separation", 8)
 	v.add_child(_menu_grid)
-	var help := Label.new()
-	help.text = "W A S D (or arrows): shot direction and footwork   |   J defend   K ground shot   L lofted   I sweep\nNo key: leave it   |   Shift: charge down the pitch   |   R: review   |   C: camera   |   Esc: menu"
-	help.add_theme_font_size_override("font_size", 16)
-	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(help)
+	_help = Label.new()
+	_help.add_theme_font_size_override("font_size", 16)
+	_help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_help.custom_minimum_size = Vector2(620, 0)
+	v.add_child(_help)
 	_menu.visible = false
 
 
+const HELP_KEYS := "W A S D (or arrows): shot direction and footwork  |  J defend  K ground shot  L lofted  I sweep\nNo key: leave it  |  Shift: charge down the pitch  |  R: review  |  C: camera  |  Esc: menu"
+const HELP_TOUCH := "Stick: up = front foot, down = back foot, left/right = leg or off side.\nHIT, LOFT, BLOCK or SWEEP as the ball arrives. Tap nothing to leave it. CHARGE dances down the pitch."
+
+
 func show_menu(levels: Array, best: Dictionary) -> void:
+	_help.text = HELP_TOUCH if show_touch else HELP_KEYS
 	for ch in _menu_grid.get_children():
 		ch.queue_free()
 	_menu_stars = best
@@ -554,8 +564,9 @@ const TOUCH_LAYOUT := {
 	"shot_attack": [66.0, Vector2(-95, -95)], "shot_defend": [52.0, Vector2(-240, -72)],
 	"shot_loft": [52.0, Vector2(-88, -252)], "shot_sweep": [44.0, Vector2(-222, -205)],
 	"dance": [40.0, Vector2(-345, -150)], "camera": [30.0, Vector2(-60, 215)],
+	"menu": [30.0, Vector2(-130, 215)],
 }
-const TOUCH_SHOTS := [["shot_defend", "BLOCK"], ["shot_attack", "HIT"], ["shot_loft", "LOFT"], ["shot_sweep", "SWEEP"], ["dance", "CHARGE"], ["camera", "CAM"]]
+const TOUCH_SHOTS := [["shot_defend", "BLOCK"], ["shot_attack", "HIT"], ["shot_loft", "LOFT"], ["shot_sweep", "SWEEP"], ["dance", "CHARGE"], ["camera", "CAM"], ["menu", "MENU"]]
 var _stick_center := Vector2.ZERO
 var _stick_touch := -1
 var _stick_vec := Vector2.ZERO
@@ -638,6 +649,8 @@ func _draw_touch() -> void:
 ## Bottom-left normally; top-centre on touch screens, where the stick lives
 ## in the bottom-left corner.
 func _bowler_rect() -> Rect2:
+	if size.y > size.x:
+		return Rect2(10.0, 145.0, 300.0, 102.0)     # tall screen: under the scoreboard
 	if show_touch:
 		return Rect2(size.x * 0.5 - 165.0, 10.0, 330.0, 102.0)
 	return Rect2(10.0, size.y - 112.0, 330.0, 102.0)
@@ -652,10 +665,16 @@ func _layout() -> void:
 	if _menu == null or _touch == null:
 		return
 	var s := size
+	var cols := 1 if s.y > s.x else 2
+	if _menu_grid.columns != cols:
+		_menu_grid.columns = cols
+		_layout.call_deferred()     # containers resize next frame; centre again then
 	_score.position = Vector2(24, 14)
 	_goal.position = Vector2(24, 62)
 	_goal.size.x = 280
 	_over_strip.position = Vector2(s.x * 0.5 - 150, s.y - 46)
+	if show_touch and s.y > s.x:
+		_over_strip.position = Vector2(30.0, s.y - 330.0)
 	_bowler.position = _bowler_rect().position + Vector2(12, 6)
 	_cond.position = Vector2(s.x - 318, 18)
 	_big.size = Vector2(s.x, 90)
@@ -664,7 +683,11 @@ func _layout() -> void:
 	_sub.position = Vector2(0, s.y * 0.3 + 86)
 	_comm.size = Vector2(clampf(s.x - 720.0, 300.0, 900.0), 40)
 	_comm.position = Vector2((s.x - _comm.size.x) * 0.5, s.y - 112)
-	_tip.size = Vector2(minf(s.x - 700, 640), 40)
+	if show_touch and s.y > s.x:
+		# Tall screen: the controls own the bottom, so commentary sits above them.
+		_comm.size.x = s.x - 60.0
+		_comm.position = Vector2(30.0, s.y - 400.0)
+	_tip.size = Vector2(clampf(s.x - 700, 300, 640), 40)
 	_tip.position = Vector2((s.x - _tip.size.x) * 0.5, 190)
 	for p in [_card, _menu, _review]:
 		p.reset_size()
