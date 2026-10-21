@@ -38,6 +38,8 @@ var _comm: Label
 var _tip: Label
 var _review: PanelContainer
 var _review_label: Label
+var _review_btn: Button
+var _walk_btn: Button
 var _drs: PanelContainer
 var _drs_label: Label
 var _card: PanelContainer
@@ -198,6 +200,7 @@ func commentary(text: String) -> void:
 
 func tip(text: String) -> void:
 	_tip.text = text
+	queue_redraw()
 
 
 func snicko(spike: float) -> void:
@@ -252,8 +255,13 @@ func _draw() -> void:
 		# Left side, clear of the batter and slips (right side on tall screens,
 		# where the bowler panel sits under the scoreboard).
 		_draw_ball_cam(Vector2(90.0, 330.0) if size.y > size.x else Vector2(90.0, 240.0), 52.0)
+	if _tip.visible and _tip.text != "":
+		# A dark panel behind the tip so it reads over the crowd.
+		var tr := Rect2(_tip.position - Vector2(14, 8), Vector2(_tip.size.x + 28, _tip.get_minimum_size().y + 16))
+		draw_rect(tr, PANEL)
 	if _timing_t > 0.0:
-		_draw_timing(Vector2(s.x * 0.5, s.y - 150.0))
+		# Above the touch controls on tall screens.
+		_draw_timing(Vector2(s.x * 0.5, (s.y - 450.0) if (show_touch and s.y > s.x) else (s.y - 150.0)))
 	if _snick_t > 0.0 and _snick >= 0.0:
 		_draw_snicko(Vector2(s.x * 0.5 - 200, s.y * 0.5 + 120))
 
@@ -366,12 +374,14 @@ func _build_review() -> void:
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.add_theme_constant_override("separation", 20)
 	v.add_child(h)
-	_button("Review (R)", h, func() -> void: review_pressed.emit())
-	_button("Walk off (Enter)", h, func() -> void: walk_pressed.emit())
+	_review_btn = _button("Review (R)", h, func() -> void: review_pressed.emit())
+	_walk_btn = _button("Walk off (Enter)", h, func() -> void: walk_pressed.emit())
 	_review.visible = false
 
 
 func ask_review(how: String, reviews_left: int) -> void:
+	_review_btn.text = "REVIEW" if show_touch else "Review (R)"
+	_walk_btn.text = "Walk off" if show_touch else "Walk off (Enter)"
 	_review_label.text = "OUT! %s\nReview it? %d review%s left" % [how, reviews_left, "" if reviews_left == 1 else "s"]
 	_review.visible = true
 	_layout()
@@ -439,6 +449,7 @@ func _card_label(text: String, size_px: int, col := CREAM) -> Label:
 
 func show_intro(index: int, level: Dictionary, goal: String) -> void:
 	_clear_card()
+	set_play_visible(false)      # no leftover scoreboard from the last match
 	_card_label("Match %d" % (index + 1), 18, GOLD)
 	_card_label(level.name, 40)
 	_card_label(level.blurb, 21)
@@ -448,7 +459,7 @@ func show_intro(index: int, level: Dictionary, goal: String) -> void:
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.add_theme_constant_override("separation", 20)
 	_card_box.add_child(h)
-	_button("Bat! (Enter)", h, func() -> void: start_pressed.emit())
+	_button("Bat!" if show_touch else "Bat! (Enter)", h, func() -> void: start_pressed.emit())
 	_button("Menu", h, func() -> void: menu_pressed.emit())
 	_card.visible = true
 	_menu.visible = false
@@ -466,9 +477,9 @@ func show_result(won: bool, stars: int, title: String, summary: String, has_next
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.add_theme_constant_override("separation", 20)
 	_card_box.add_child(h)
-	_button("Retry (R)", h, func() -> void: retry_pressed.emit())
+	_button("Retry" if show_touch else "Retry (R)", h, func() -> void: retry_pressed.emit())
 	if won and has_next:
-		_button("Next (Enter)", h, func() -> void: next_pressed.emit())
+		_button("Next" if show_touch else "Next (Enter)", h, func() -> void: next_pressed.emit())
 	_button("Menu", h, func() -> void: menu_pressed.emit())
 	_card_stars = stars if won else -1
 	_card.visible = true
@@ -691,6 +702,9 @@ func _layout() -> void:
 		_comm.position = Vector2(30.0, s.y - 400.0)
 	_tip.size = Vector2(clampf(s.x - 700, 300, 640), 40)
 	_tip.position = Vector2((s.x - _tip.size.x) * 0.5, 190)
+	if s.y > s.x:
+		_tip.size = Vector2(s.x - 80.0, 40)
+		_tip.position = Vector2(40.0, 275.0)     # below the bowler panel
 	for p in [_card, _menu, _review]:
 		p.reset_size()
 		p.position = (s - p.size) * 0.5

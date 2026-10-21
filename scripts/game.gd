@@ -445,6 +445,10 @@ func _process(delta: float) -> void:
 	_sim_time += delta
 	_check_flags()
 	phase_t += delta
+	if _flags.has("auto-ui"):
+		_auto_ui()
+	if _flags.has("audit"):
+		_audit()
 	match phase:
 		Phase.PRE:
 			if phase_t > 0.7:
@@ -708,6 +712,69 @@ func _impact_sound() -> void:
 		sound.play("howzat", -11.0, randf_range(0.95, 1.05), 0.25)
 
 
+## Dev flag --auto-ui: click through the menus like a player (for full-flow
+## recordings): pick the match, read the card, press Bat!, and at the end
+## press Next or Retry. Uses the same signals the buttons emit.
+var _auto_t := 0.0
+
+func _auto_ui() -> void:
+	_auto_t += get_process_delta_time()
+	match phase:
+		Phase.MENU:
+			if _auto_t > 1.5:
+				_auto_t = 0.0
+				hud.level_chosen.emit(int(_flags.get("auto-level", "0")))
+		Phase.INTRO:
+			if _auto_t > 2.5:
+				_auto_t = 0.0
+				hud.start_pressed.emit()
+		Phase.END:
+			if _auto_t > 3.0:
+				_auto_t = 0.0
+				if won:
+					hud.next_pressed.emit()
+				else:
+					hud.retry_pressed.emit()
+		_:
+			_auto_t = 0.0
+
+
+## Dev flag --audit: checks that should always hold, every frame. Prints
+## "AUDIT <time> <problem>" (once per problem per ball).
+var _audit_seen := {}
+
+func _audit_fail(msg: String) -> void:
+	var key := "%d:%s" % [balls, msg]
+	if not _audit_seen.has(key):
+		_audit_seen[key] = true
+		print("AUDIT %.2f phase=%s %s" % [_sim_time, Phase.keys()[phase], msg])
+
+
+func _audit() -> void:
+	if phase == Phase.MENU or level.is_empty():
+		return
+	if ball.visible and ball.position.y < -0.02:
+		_audit_fail("ball below ground y=%.2f" % ball.position.y)
+	if not ball.position.is_finite():
+		_audit_fail("ball position not finite")
+	var limit := {Phase.PRE: 3.0, Phase.RUNUP: 3.0, Phase.FLIGHT: 4.0, Phase.PLAY: 9.0, Phase.DECIDE: 3.0,
+			Phase.DRS: 5.0, Phase.BETWEEN: 4.0}
+	if limit.has(phase) and phase_t > float(limit[phase]):
+		_audit_fail("stuck in phase for %.1fs" % phase_t)
+	if runs < 0 or wkts < 0 or wkts > int(level.wickets) or balls > int(level.balls):
+		_audit_fail("impossible score %d/%d balls %d" % [runs, wkts, balls])
+	if phase == Phase.RUNUP and batter.position.distance_to(Strokes.ROOT) > 0.05 and not danced:
+		_audit_fail("batter not at the crease at run-up")
+	for i in fielder_figs.size():
+		var f: Node3D = fielder_figs[i]
+		if f.visible and Vector2(f.position.x, f.position.z - Fielding.CENTRE.y).length() > Fielding.BOUNDARY + 8.0:
+			_audit_fail("fielder %d outside the ground" % i)
+	if phase in [Phase.PRE, Phase.RUNUP] and pitch_mark.visible:
+		_audit_fail("old pitch mark still showing")
+	if phase in [Phase.PRE, Phase.RUNUP] and ball.visible:
+		_audit_fail("ball visible before release")
+
+
 ## Dev flag --log-events: timestamped moments, for cutting videos.
 func _event(name: String) -> void:
 	if _flags.has("log-events"):
@@ -757,8 +824,11 @@ func _contact_word(c: String) -> String:
 
 
 func _play(delta: float) -> void:
-	play_t += delta
 	var fr: Dictionary = out_o.get("field", {})
+	# Time-lapse: the shot plays at full speed, then the chase to the ball or
+	# the rope runs at double speed so there's no dead time.
+	var hit_ball := not fr.is_empty()
+	play_t += delta * (2.0 if hit_ball and play_t > 1.3 else 1.0)
 	if not fr.is_empty() and not bat.played_on and not bat.hit_wicket:
 		var t_end: float = fr.t_end
 		var result: String = fr.result
@@ -784,9 +854,9 @@ func _play(delta: float) -> void:
 				var p := _throw_from.lerp(to, k)
 				p.y += sin(k * PI) * minf(_throw_from.distance_to(to) * 0.12, 6.0)
 				_show_ball(p)
-		var done := t_end + 1.0
+		var done := t_end + 0.8
 		if thrown:
-			done = t_end + 0.35 + throw_dur + 0.3
+			done = t_end + 0.35 + minf(throw_dur, 0.6)    # the score comes up as the throw goes in
 		if play_t >= minf(done, 7.0):
 			_set_phase(Phase.DECIDE)
 	else:
@@ -1245,7 +1315,11 @@ func _umpire_finger(up: bool) -> void:
 
 # ---------------------------------------------------------------- batter animation
 
+var _batter_tw: Tween       # the walk-off or the charge; stopped when the next ball starts
+
 func _batter_stance() -> void:
+	if _batter_tw and _batter_tw.is_valid():
+		_batter_tw.kill()
 	batter.position = Strokes.ROOT
 	batter.set_pose(Strokes.stance())
 
@@ -1254,6 +1328,7 @@ func _batter_stance() -> void:
 func _batter_charge() -> void:
 	batter.run_procedural(func(tt: float) -> Dictionary: return Strokes.gait(tt, 5.0, Vector3(0.2, 0, -1)))
 	var tw := create_tween()
+	_batter_tw = tw
 	tw.tween_property(batter, "position", Strokes.ROOT + Vector3(0.15, 0.0, -2.25), 0.42)
 	tw.tween_callback(func() -> void:
 		if not shot_taken:
@@ -1283,6 +1358,7 @@ func _batter_trudge() -> void:
 		g.batface = dir
 		return g)
 	var tw := create_tween()
+	_batter_tw = tw
 	tw.tween_interval(0.5)
 	tw.tween_property(batter, "position", batter.position + dir * 3.5, 2.6)
 

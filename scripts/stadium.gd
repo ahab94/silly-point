@@ -76,7 +76,7 @@ func _build_sky() -> void:
 	e.background_mode = Environment.BG_SKY
 	e.sky = sky
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	e.ambient_light_energy = 0.4 if night else 0.42
+	e.ambient_light_energy = 0.45 if night else 0.6     # enough fill that backlit fielders aren't silhouettes
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	e.tonemap_exposure = 0.78
 	env = WorldEnvironment.new()
