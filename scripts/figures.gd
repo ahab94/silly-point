@@ -215,6 +215,9 @@ class Batter extends Node3D:
 		_tw.parallel().tween_property(hands, "rotation:x", -2.6, 0.2)
 
 	func trudge() -> void:
-		var t := create_tween()
-		t.tween_interval(0.6)
-		t.tween_property(self, "position", position + Vector3(-6.0, 0.0, 4.0), 2.5)
+		# Kept in _tw so the next stance() stops the walk-off for the new batter.
+		if _tw:
+			_tw.kill()
+		_tw = create_tween()
+		_tw.tween_interval(0.6)
+		_tw.tween_property(self, "position", position + Vector3(-6.0, 0.0, 4.0), 2.5)
