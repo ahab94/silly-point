@@ -96,6 +96,30 @@ func _run() -> void:
 	world.add_child(cam)
 	cam.current = true
 
+	if "--face" in OS.get_cmdline_user_args():
+		batter.visible = false
+		ball.visible = false
+		var kinds := [["cap", Color(0.1, 0.2, 0.45), Color(0.82, 0.6, 0.43)], ["umpire", Color.WHITE, Color(0.6, 0.42, 0.28)],
+				["helmet", Color(0.1, 0.18, 0.4), Color(0.96, 0.8, 0.66)]]
+		var n2 := 0
+		for kd in kinds:
+			var r := Rig.new()
+			world.add_child(r)
+			r.build(Color(0.86, 0.85, 0.8), kd[2], kd[0], kd[1], kd[0] == "helmet", kd[0] == "helmet", kd[0] == "helmet")
+			r.set_process(false)
+			r.set_pose(Strokes.ready_pose(Vector3(0, 0, 1), 0.0))
+			r.position = Vector3(0, 0, -5)
+			r.look_at_world = Vector3(0.4, 1.6, -3.5)
+			cam.position = Vector3(0.45, 1.65, -3.6)
+			cam.look_at(Vector3(0, 1.45, -5))
+			await process_frame
+			await process_frame
+			root.get_texture().get_image().save_png("%s/face_%d.png" % [out_dir, n2])
+			r.queue_free()
+			n2 += 1
+		print("POSES DONE ", n2)
+		quit(0)
+		return
 	if "--bowler" in OS.get_cmdline_user_args() or "--gait" in OS.get_cmdline_user_args() or "--dive" in OS.get_cmdline_user_args():
 		batter.visible = false
 		ball.visible = false

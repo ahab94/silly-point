@@ -34,7 +34,7 @@ const SHIN := 0.45
 const UPPER_ARM := 0.3
 const FOREARM := 0.29
 const SPINE := 0.5
-const SHOULDER := 0.19
+const SHOULDER := 0.172
 const HIP := 0.1
 const BAT_LEN := 0.86
 const SWEET := 0.6          # from the top hand to the middle of the bat
@@ -85,7 +85,7 @@ static func _cyl(r_top: float, r_bot: float) -> CylinderMesh:
 	m.top_radius = r_top
 	m.bottom_radius = r_bot
 	m.height = 1.0
-	m.radial_segments = 10
+	m.radial_segments = 16
 	m.rings = 1
 	return m
 
@@ -94,8 +94,8 @@ static func _sphere(r: float) -> SphereMesh:
 	var m := SphereMesh.new()
 	m.radius = r
 	m.height = r * 2.0
-	m.radial_segments = 12
-	m.rings = 6
+	m.radial_segments = 20
+	m.rings = 10
 	return m
 
 
@@ -105,88 +105,123 @@ static func _box(s: Vector3) -> BoxMesh:
 	return m
 
 
-## kit: shirt and trousers. extra: "helmet", "cap", "umpire", "keeper".
-## pads: batter's or keeper's leg guards. bat: give them a bat.
+## A child mesh of `parent` (not driven by the solver: it rides along).
+func _child(parent: Node3D, mesh: Mesh, c: Color, pos: Vector3, scl := Vector3.ONE, rot := Vector3.ZERO) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = _mat(c)
+	mi.position = pos
+	mi.scale = scl
+	mi.rotation = rot
+	parent.add_child(mi)
+	return mi
+
+
+static func _cap(r: float, h: float) -> CapsuleMesh:
+	var m := CapsuleMesh.new()
+	m.radius = r
+	m.height = h
+	m.radial_segments = 16
+	m.rings = 6
+	return m
+
+
+## kit: the shirt colour (trousers are a shade darker, like real whites).
+## hat: "helmet", "cap", "umpire" or "none". pads: batter's leg guards.
+## bat: give them a bat. gloves: batting gloves.
 func build(kit: Color, skin: Color, hat: String, hat_color: Color, pads := false, bat := false, gloves := false) -> void:
 	has_bat = bat
-	var trousers := kit
-	_mesh_node("torso", _cyl(0.17, 0.14), kit)
-	_mesh_node("hips", _sphere(0.15), trousers).scale = Vector3(1.0, 0.75, 0.8)
-	_mesh_node("chest", _sphere(0.18), kit).scale = Vector3(1.0, 0.8, 0.75)
-	_mesh_node("neck", _cyl(0.05, 0.05), skin)
-	_mesh_node("head", _sphere(0.11), skin)
+	var shirt := kit
+	var trousers := kit.darkened(0.06)
+	var hair := Color(0.12, 0.09, 0.07)
+	var shoe := Color(0.9, 0.9, 0.88)
+	var pad_col := Color(0.92, 0.92, 0.9)
+	# Body: hips, belly and chest as smooth ellipsoids, joined by a waist.
+	_mesh_node("torso", _cyl(0.15, 0.13), shirt)
+	_mesh_node("hips", _sphere(0.15), trousers)
+	_mesh_node("belly", _sphere(0.14), shirt)
+	_mesh_node("chest", _sphere(0.18), shirt)
+	_mesh_node("belt", _cyl(0.155, 0.155), Color(0.18, 0.16, 0.14))
+	_mesh_node("collar", _cyl(0.07, 0.085), shirt.lightened(0.05))
+	_mesh_node("neck", _cyl(0.05, 0.055), skin)
+	var head := _mesh_node("head", _sphere(0.113), skin)
+	# Face, seen on fielders and the umpire: the head looks along -z.
+	_child(head, _sphere(0.02), skin.darkened(0.08), Vector3(0, -0.025, -0.112), Vector3(0.9, 1.2, 1.0))         # nose
+	for side in [-1.0, 1.0]:
+		_child(head, _sphere(0.012), Color(0.08, 0.06, 0.05), Vector3(0.038 * side, 0.01, -0.1))          # eyes
+		_child(head, _sphere(0.025), skin.darkened(0.05), Vector3(0.11 * side, -0.005, 0.005), Vector3(0.45, 1.0, 0.8))   # ears
+		_child(head, _box(Vector3(0.035, 0.008, 0.01)), hair, Vector3(0.038 * side, 0.035, -0.103))           # eyebrows
+	_child(head, _sphere(0.117), hair, Vector3(0, 0.03, 0.012), Vector3(1.0, 0.85, 1.0))                   # hair
+	head.scale = Vector3(0.92, 1.08, 1.0)
 	for s in ["l", "r"]:
-		_mesh_node(s + "thigh", _cyl(0.085, 0.065), trousers)
-		_mesh_node(s + "shin", _cyl(0.065, 0.05), Color(0.97, 0.97, 0.97) if pads else trousers)
+		_mesh_node(s + "hipj", _sphere(0.088), trousers)
+		_mesh_node(s + "thigh", _cyl(0.085, 0.062), trousers)
+		_mesh_node(s + "shin", _cyl(0.06, 0.045), pad_col if pads else trousers)
+		_mesh_node(s + "ankle", _sphere(0.046), pad_col if pads else trousers)
 		if pads:
-			_mesh_node(s + "pad", _box(Vector3(0.16, 1.0, 0.13)), Color(0.98, 0.98, 0.98))
-			_mesh_node(s + "kneeroll", _sphere(0.085), Color(0.98, 0.98, 0.98))
-		_mesh_node(s + "knee", _sphere(0.068), Color(0.98, 0.98, 0.98) if pads else trousers)
-		_mesh_node(s + "foot", _box(Vector3(0.1, 0.08, 0.27)), Color(0.95, 0.95, 0.95))
-		_mesh_node(s + "upper", _cyl(0.055, 0.045), kit)
-		_mesh_node(s + "fore", _cyl(0.045, 0.038), skin if not gloves else kit)
-		_mesh_node(s + "elbow", _sphere(0.048), kit)
-		_mesh_node(s + "hand", _sphere(0.065 if gloves else 0.045), Color(0.97, 0.97, 0.97) if gloves else skin)
-	var head: MeshInstance3D = _parts.head
+			var pad := _mesh_node(s + "pad", _box(Vector3(0.17, 1.0, 0.13)), pad_col)
+			# Vertical ribs down the front, and two straps round the back.
+			for k in [-1.0, 0.0, 1.0]:
+				_child(pad, _box(Vector3(0.035, 0.92, 0.04)), pad_col.lightened(0.04), Vector3(k * 0.052, 0.0, 0.07))
+			for y in [-0.25, 0.2]:
+				_child(pad, _box(Vector3(0.18, 0.04, 0.14)), Color(0.25, 0.22, 0.2), Vector3(0, y, -0.01))
+			_mesh_node(s + "kneeroll", _sphere(0.088), pad_col)
+		_mesh_node(s + "knee", _sphere(0.066), pad_col if pads else trousers)
+		# Shoe: white upper, darker sole, rounded toe.
+		var foot := _mesh_node(s + "foot", _box(Vector3(0.095, 0.07, 0.24)), shoe)
+		_child(foot, _box(Vector3(0.1, 0.025, 0.27)), Color(0.3, 0.3, 0.32), Vector3(0, -0.045, -0.01))
+		_child(foot, _sphere(0.05), shoe, Vector3(0, -0.005, -0.12), Vector3(1.0, 0.7, 1.0))
+		_mesh_node(s + "shoulder", _sphere(0.058), shirt)
+		_mesh_node(s + "upper", _cyl(0.056, 0.047), shirt)
+		_mesh_node(s + "fore", _cyl(0.047, 0.038), shirt)        # long sleeves
+		_mesh_node(s + "elbow", _sphere(0.05), shirt)
+		var hand := _mesh_node(s + "hand", _sphere(0.062 if gloves else 0.042), Color(0.93, 0.93, 0.9) if gloves else skin)
+		if gloves:
+			hand.scale = Vector3(1.0, 0.9, 1.25)
+			_child(hand, _box(Vector3(0.09, 0.03, 0.06)), Color(0.15, 0.25, 0.55), Vector3(0, 0.035, 0.0))    # padded back
 	var hat_root := Node3D.new()
 	head.add_child(hat_root)
 	_parts.hat = hat_root
 	match hat:
 		"helmet":
-			var shell := MeshInstance3D.new()
-			shell.mesh = _sphere(0.135)
-			shell.material_override = _mat(hat_color)
-			shell.position = Vector3(0, 0.03, 0.01)
-			shell.scale = Vector3(1.0, 0.88, 1.05)
-			hat_root.add_child(shell)
-			var peak := MeshInstance3D.new()
-			peak.mesh = _box(Vector3(0.2, 0.015, 0.1))
-			peak.material_override = _mat(hat_color)
-			peak.position = Vector3(0, 0.075, -0.13)
-			hat_root.add_child(peak)
-			var grill := MeshInstance3D.new()
-			grill.mesh = _box(Vector3(0.18, 0.12, 0.015))
-			grill.material_override = _mat(Color(0.7, 0.7, 0.74))
-			grill.position = Vector3(0, -0.04, -0.14)
-			hat_root.add_child(grill)
+			_child(hat_root, _sphere(0.135), hat_color, Vector3(0, 0.035, 0.015), Vector3(1.0, 0.86, 1.06))
+			_child(hat_root, _box(Vector3(0.21, 0.014, 0.1)), hat_color, Vector3(0, 0.075, -0.13), Vector3.ONE, Vector3(0.12, 0, 0))
+			_child(hat_root, _box(Vector3(0.2, 0.06, 0.03)), hat_color.darkened(0.2), Vector3(0, -0.07, 0.12))  # neck guard
+			# Grille: three bars across the face and one down the middle.
+			var steel := Color(0.62, 0.63, 0.67)
+			for k in 3:
+				_child(hat_root, _box(Vector3(0.19, 0.008, 0.008)), steel, Vector3(0, -0.005 - k * 0.04, -0.145))
+			_child(hat_root, _box(Vector3(0.008, 0.09, 0.008)), steel, Vector3(0, -0.045, -0.148))
+			for side in [-1.0, 1.0]:
+				_child(hat_root, _box(Vector3(0.008, 0.09, 0.05)), steel, Vector3(0.095 * side, -0.045, -0.125))
 		"cap":
-			var crown := MeshInstance3D.new()
-			crown.mesh = _sphere(0.118)
-			crown.material_override = _mat(hat_color)
-			crown.position = Vector3(0, 0.04, 0)
-			crown.scale = Vector3(1, 0.62, 1)
-			hat_root.add_child(crown)
-			var brim := MeshInstance3D.new()
-			brim.mesh = _box(Vector3(0.16, 0.012, 0.12))
-			brim.material_override = _mat(hat_color)
-			brim.position = Vector3(0, 0.045, -0.14)
-			hat_root.add_child(brim)
+			_child(hat_root, _sphere(0.115), hat_color, Vector3(0, 0.045, 0.005), Vector3(1.0, 0.62, 1.05))
+			_child(hat_root, _box(Vector3(0.15, 0.01, 0.11)), hat_color.darkened(0.1), Vector3(0, 0.055, -0.135), Vector3.ONE, Vector3(0.15, 0, 0))
+			_child(hat_root, _sphere(0.012), hat_color.lightened(0.2), Vector3(0, 0.12, 0.0))                    # button
 		"umpire":
-			var b := MeshInstance3D.new()
 			var cm := CylinderMesh.new()
-			cm.top_radius = 0.1
-			cm.bottom_radius = 0.22
-			cm.height = 0.13
-			b.mesh = cm
-			b.material_override = _mat(Color(0.95, 0.95, 0.9))
-			b.position = Vector3(0, 0.1, 0)
-			hat_root.add_child(b)
+			cm.top_radius = 0.09
+			cm.bottom_radius = 0.105
+			cm.height = 0.1
+			_child(hat_root, cm, Color(0.93, 0.92, 0.88), Vector3(0, 0.1, 0))
+			var brim := CylinderMesh.new()
+			brim.top_radius = 0.22
+			brim.bottom_radius = 0.22
+			brim.height = 0.012
+			_child(hat_root, brim, Color(0.93, 0.92, 0.88), Vector3(0, 0.055, 0))
+			_child(hat_root, _cyl(0.092, 0.092), Color(0.15, 0.15, 0.2), Vector3(0, 0.07, 0), Vector3(1, 0.02, 1))   # band
 	if bat:
 		var bn := Node3D.new()
 		add_child(bn)
 		_parts.bat = bn
-		var handle := MeshInstance3D.new()
-		var hm := _cyl(0.017, 0.017)
-		handle.mesh = hm
-		handle.material_override = _mat(Color(0.12, 0.12, 0.12))
-		handle.scale = Vector3(1, 0.3, 1)
-		handle.position = Vector3(0, -0.12, 0)
-		bn.add_child(handle)
-		var blade := MeshInstance3D.new()
-		blade.mesh = _box(Vector3(0.108, 0.56, 0.05))
-		blade.material_override = _mat(Color(0.9, 0.78, 0.53))
-		blade.position = Vector3(0, -0.27 - 0.28, 0.008)
-		bn.add_child(blade)
+		var willow := Color(0.85, 0.74, 0.52)
+		_child(bn, _cyl(0.018, 0.018), Color(0.55, 0.12, 0.12), Vector3(0, -0.12, 0), Vector3(1, 0.3, 1))       # rubber grip
+		_child(bn, _cyl(0.02, 0.02), Color(0.2, 0.2, 0.2), Vector3(0, 0.03, 0), Vector3(1, 0.02, 1))            # handle cap
+		var blade := _child(bn, _box(Vector3(0.108, 0.56, 0.03)), willow, Vector3(0, -0.55, 0.01))
+		_child(blade, _box(Vector3(0.06, 0.5, 0.03)), willow.darkened(0.05), Vector3(0, -0.01, -0.025))      # the spine
+		_child(blade, _box(Vector3(0.1, 0.08, 0.004)), Color(0.12, 0.3, 0.6), Vector3(0, 0.19, 0.017))          # sticker
+		_child(blade, _box(Vector3(0.1, 0.02, 0.004)), Color(0.85, 0.15, 0.15), Vector3(0, 0.13, 0.017))
+		_child(bn, _box(Vector3(0.05, 0.06, 0.04)), willow, Vector3(0, -0.28, 0.005))                        # shoulders
 	pose = base_pose()
 	_solve()
 
@@ -330,11 +365,19 @@ func _solve() -> void:
 
 	# Torso and head.
 	_limb("torso", pelvis + spine_up * 0.05, chest)
-	_at("hips", pelvis)
+	var tb := Basis(right, spine_up, -face).orthonormalized()
 	var chest_mi: MeshInstance3D = _parts.chest
-	chest_mi.transform = Transform3D(Basis(right, spine_up, -face).orthonormalized().scaled(Vector3(1.0, 0.8, 0.75)), chest - spine_up * 0.03)
+	chest_mi.transform = Transform3D(tb.scaled(Vector3(1.06, 0.84, 0.72)), chest - spine_up * 0.05)
+	var belly_mi: MeshInstance3D = _parts.belly
+	belly_mi.transform = Transform3D(tb.scaled(Vector3(1.0, 1.0, 0.82)), pelvis + spine_up * 0.2)
 	var hips_mi: MeshInstance3D = _parts.hips
-	hips_mi.transform = Transform3D(Basis(hip_right, Vector3.UP, -hip_face).orthonormalized().scaled(Vector3(1.0, 0.75, 0.8)), pelvis)
+	hips_mi.transform = Transform3D(Basis(hip_right, Vector3.UP, -hip_face).orthonormalized().scaled(Vector3(1.12, 0.72, 0.85)), pelvis)
+	var belt_mi: MeshInstance3D = _parts.get("belt")
+	if belt_mi:
+		belt_mi.transform = Transform3D(Basis(hip_right, Vector3.UP, -hip_face).orthonormalized().scaled(Vector3(1.02, 0.028, 0.8)), pelvis + Vector3.UP * 0.075)
+	var collar_mi: MeshInstance3D = _parts.get("collar")
+	if collar_mi:
+		collar_mi.transform = Transform3D(tb.scaled(Vector3(1.0, 0.05, 1.0)), chest + spine_up * 0.1)
 	_limb("neck", chest, neck + spine_up * 0.03)
 	var head_mi: MeshInstance3D = _parts.head
 	var look := to_local(look_at_world) - head if look_at_world != Vector3.ZERO else face
@@ -351,12 +394,14 @@ func _solve() -> void:
 	# Legs: hips to ankles, knees bend forward (towards the hip facing).
 	for s in ["l", "r"]:
 		var hip := pelvis + hip_right * (HIP if s == "r" else -HIP) + Vector3.DOWN * 0.04
+		_at(s + "hipj", hip)
 		var ankle: Vector3 = p[s + "f"]
 		ankle = reach(hip, ankle, THIGH + SHIN - 0.002)
 		var knee := ik(hip, ankle, THIGH, SHIN, hip_face + hip_right * (0.15 if s == "r" else -0.15))
 		_limb(s + "thigh", hip, knee)
 		_limb(s + "shin", knee, ankle)
 		_at(s + "knee", knee)
+		_at(s + "ankle", ankle)
 		if _parts.has(s + "pad"):
 			var pad: MeshInstance3D = _parts[s + "pad"]
 			var y := (knee - ankle).normalized()
@@ -389,6 +434,7 @@ func _solve() -> void:
 		var sh := chest + right * (SHOULDER if s == "r" else -SHOULDER) + sh_drop
 		var hand: Vector3 = lh if s == "l" else rh
 		var got := reach(sh, hand, UPPER_ARM + FOREARM - 0.002)
+		_at(s + "shoulder", sh)
 		var elbow := ik(sh, got, UPPER_ARM, FOREARM, lpole if s == "l" else rpole)
 		_limb(s + "upper", sh, elbow)
 		_limb(s + "fore", elbow, got)

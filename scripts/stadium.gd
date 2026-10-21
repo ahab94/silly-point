@@ -65,8 +65,8 @@ func _build_sky() -> void:
 		sky_mat.ground_horizon_color = Color(0.1, 0.1, 0.15)
 		sky_mat.ground_bottom_color = Color(0.03, 0.03, 0.05)
 	else:
-		sky_mat.sky_top_color = Color(0.3, 0.52, 0.85)
-		sky_mat.sky_horizon_color = Color(0.72, 0.84, 0.95)
+		sky_mat.sky_top_color = Color(0.32, 0.5, 0.78)
+		sky_mat.sky_horizon_color = Color(0.66, 0.76, 0.86)
 		# Below the horizon (seen over the stands from the high camera): keep it sky-coloured.
 		sky_mat.ground_horizon_color = Color(0.72, 0.84, 0.95)
 		sky_mat.ground_bottom_color = Color(0.6, 0.72, 0.85)
@@ -76,15 +76,15 @@ func _build_sky() -> void:
 	e.background_mode = Environment.BG_SKY
 	e.sky = sky
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	e.ambient_light_energy = 0.45 if night else 0.5
+	e.ambient_light_energy = 0.4 if night else 0.42
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	e.tonemap_exposure = 0.9
+	e.tonemap_exposure = 0.78
 	env = WorldEnvironment.new()
 	env.environment = e
 	add_child(env)
 	sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-52.0, 28.0, 0.0)
-	sun.light_energy = 0.45 if night else 1.0
+	sun.light_energy = 0.45 if night else 0.85
 	sun.light_color = Color(0.85, 0.88, 1.0) if night else Color(1.0, 0.97, 0.9)
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 60.0
@@ -101,15 +101,15 @@ func set_overcast(on: bool) -> void:
 		sm.sky_horizon_color = Color(0.72, 0.74, 0.76)
 		sun.light_energy = 0.75
 	else:
-		sm.sky_top_color = Color(0.3, 0.52, 0.85)
-		sm.sky_horizon_color = Color(0.72, 0.84, 0.95)
-		sun.light_energy = 1.15
+		sm.sky_top_color = Color(0.32, 0.5, 0.78)
+		sm.sky_horizon_color = Color(0.66, 0.76, 0.86)
+		sun.light_energy = 0.85
 
 
 func _build_outfield() -> void:
 	var img := Image.create(2, 1, false, Image.FORMAT_RGB8)
-	img.set_pixel(0, 0, Color(0.2, 0.42, 0.15))
-	img.set_pixel(1, 0, Color(0.24, 0.48, 0.18))
+	img.set_pixel(0, 0, Color(0.19, 0.36, 0.15))
+	img.set_pixel(1, 0, Color(0.22, 0.41, 0.17))
 	var m := StandardMaterial3D.new()
 	m.albedo_texture = ImageTexture.create_from_image(img)
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
@@ -136,7 +136,7 @@ func _build_outfield() -> void:
 	# The square: a slightly worn, lighter area around the pitch.
 	var sq := PlaneMesh.new()
 	sq.size = Vector2(14.0, 26.0)
-	add_mesh(sq, mat(Color(0.27, 0.46, 0.19)), Vector3(0.0, -0.002, CENTRE_Z))
+	add_mesh(sq, mat(Color(0.24, 0.39, 0.18)), Vector3(0.0, -0.002, CENTRE_Z))
 
 
 func _build_stands() -> void:
@@ -272,7 +272,7 @@ func paint_pitch(c) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 77 + c.day
 	var grass: float = c.grass()
-	var base := Color(0.72, 0.62, 0.43).lerp(Color(0.4, 0.52, 0.27), grass)
+	var base := Color(0.66, 0.57, 0.41).lerp(Color(0.38, 0.47, 0.26), grass)
 	for y in h:
 		for x in w:
 			var n := rng.randf_range(-0.04, 0.04)

@@ -7,7 +7,7 @@ extends RefCounted
 ## one after another; `set_parallel(true)` runs them together.
 
 const SKIN := [Color(0.96, 0.8, 0.66), Color(0.82, 0.6, 0.43), Color(0.6, 0.42, 0.28), Color(0.4, 0.27, 0.18)]
-const WHITES := Color(0.95, 0.94, 0.9)
+const WHITES := Color(0.86, 0.85, 0.8)   # off-white flannels, not glaring
 
 static var _mats := {}
 
