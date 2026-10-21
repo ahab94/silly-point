@@ -2,6 +2,18 @@
 
 **A 3D batting game about all the strange things a cricket ball does.**
 
+![A straight drive races away for four](docs/media/cover-drive.gif)
+
+**[Play in your browser](https://ahab94.github.io/silly-point/)** (desktop or phone) · [Downloads for Windows, macOS and Linux](https://github.com/ahab94/silly-point/releases/latest) · If you enjoy it, a ⭐ helps a lot.
+
+Install with one command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ahab94/silly-point/main/install.sh | bash
+```
+
+On Windows (PowerShell): `irm https://raw.githubusercontent.com/ahab94/silly-point/main/install.ps1 | iex`
+
 New balls swing. Old balls reverse. Green pitches seam, Day 5 pitches crack, footmarks turn square, dew turns the ball into soap. You have one bat, a sense of timing, and a review you probably shouldn't waste.
 
 Built in Godot 4.7 (GDScript) with the Compatibility renderer, so it runs in the browser. Everything is drawn and synthesized in code.
@@ -95,7 +107,8 @@ Stars: in a chase, ★ for winning, ★★ for losing no wickets, and ★★★ 
 - [ ] Running between the wickets: call for a risky extra run, with run-outs.
 - [ ] Quick play: pick the day, ball age, weather and bowler.
 - [ ] Music, more crowd reactions, a duck animation for getting out for 0.
-- [ ] Portrait mode for Shorts. GitHub repo, release workflow, browser build on Pages.
+- [x] GitHub repo, release workflow, browser build on Pages, one-line installers.
+- [ ] Portrait mode for Shorts and phones held upright.
 
 ## Development
 
