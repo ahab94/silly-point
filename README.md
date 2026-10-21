@@ -20,7 +20,7 @@ Built in Godot 4.7 (GDScript) with the Compatibility renderer, so it runs in the
 
 ## How to play
 
-Controls are in the Cricket 07 style: hold a direction, press a shot key as the ball arrives.
+Classic console-cricket controls: hold a direction, press a shot key as the ball arrives.
 
 | Action | Keyboard | Touch |
 |---|---|---|

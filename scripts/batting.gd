@@ -14,7 +14,7 @@ extends RefCounted
 ##
 ## The input is {shot, foot, aim, t_press, dance, th_adj}: shot is leave /
 ## defend / attack / loft / sweep; foot is front / neutral / back; aim is -1
-## (leg), 0 (straight) or 1 (off). Controls are Cricket 07 style: the 8-way
+## (leg), 0 (straight) or 1 (off). Controls are classic console-cricket style: the 8-way
 ## direction held when you press the shot key sets both. Up is front foot,
 ## down is back foot, left and right pick the side (see `from_direction`). Everything is deterministic for a delivery, so
 ## the autopilot can try shots out before playing one.

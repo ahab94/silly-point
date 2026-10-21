@@ -32,7 +32,7 @@ A 3D cricket batting game in Godot 4.7 (GDScript, Compatibility renderer, so it 
   - `scripts/conditions.gd`: ball age, pitch day and weather. Swing balance (conventional minus reverse), grip, bounce, cracks, footmark rough.
   - `scripts/ball_sim.gd`: delivery integration, `naive_predict` (what a batter expects), and hit-ball flight. Coordinates: striker's stumps at the origin, the bowler comes from -z, +x is the off side.
   - `scripts/bowling.gd`: bowlers (all invented names) and `make()`, which turns a delivery kind plus conditions into sim numbers. Tuning constants are SWING_K, SEAM_K and TURN_DEG.
-  - `scripts/batting.gd`: SHOTS table, `from_direction` (the Cricket 07 mapping) and `resolve` (timing, bat placement, edges, pad/body/bowled). Key ideas:
+  - `scripts/batting.gd`: SHOTS table, `from_direction` (the 8-way direction mapping) and `resolve` (timing, bat placement, edges, pad/body/bowled). Key ideas:
     - ADJUST is the fraction of late movement the bat can still follow;
     - "play with the movement" is the `cover` term;
     - driving on the up is the `over` term.
