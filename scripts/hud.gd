@@ -237,7 +237,7 @@ func _draw() -> void:
 	# Panels behind the text blocks.
 	draw_rect(Rect2(10, 10, 300, 128), PANEL)
 	draw_rect(Rect2(s.x - 330, 10, 320, 160), PANEL)
-	draw_rect(Rect2(10, s.y - 112, 330, 102), PANEL)
+	draw_rect(_bowler_rect(), PANEL)
 	# Ball meters.
 	if not _cond_data.is_empty():
 		var x0 := s.x - 318.0
@@ -547,6 +547,14 @@ func show_menu(levels: Array, best: Dictionary) -> void:
 
 ## A virtual 8-way stick on the left (direction and footwork) and shot
 ## buttons on the right. They press the same input actions as the keys.
+## Touch buttons: [action, label, radius, offset]. Offsets are from the
+## bottom-right corner (CAM's is from the top-right). HIT is the big one
+## under the thumb; the rarer ones sit further away.
+const TOUCH_LAYOUT := {
+	"shot_attack": [66.0, Vector2(-95, -95)], "shot_defend": [52.0, Vector2(-240, -72)],
+	"shot_loft": [52.0, Vector2(-88, -252)], "shot_sweep": [44.0, Vector2(-222, -205)],
+	"dance": [40.0, Vector2(-345, -150)], "camera": [30.0, Vector2(-60, 215)],
+}
 const TOUCH_SHOTS := [["shot_defend", "BLOCK"], ["shot_attack", "HIT"], ["shot_loft", "LOFT"], ["shot_sweep", "SWEEP"], ["dance", "CHARGE"], ["camera", "CAM"]]
 var _stick_center := Vector2.ZERO
 var _stick_touch := -1
@@ -563,7 +571,7 @@ func _build_touch() -> void:
 	for s in TOUCH_SHOTS:
 		var b := TouchScreenButton.new()
 		var circle := CircleShape2D.new()
-		circle.radius = 52.0
+		circle.radius = float(TOUCH_LAYOUT[s[0]][0]) * 1.15   # a little bigger than drawn, for thumbs
 		b.shape = circle
 		b.shape_centered = true
 		b.action = s[0]
@@ -616,12 +624,24 @@ func _draw_touch() -> void:
 	for i in _buttons.size():
 		var b: TouchScreenButton = _buttons[i]
 		var col := Color(0.15, 0.45, 0.25, 0.85 if b.is_pressed() else 0.55)
-		_touch.draw_circle(b.position, 46.0, col)
-		_touch.draw_arc(b.position, 46.0, 0, TAU, 32, CREAM, 2.0)
-		_touch.draw_string(font, b.position + Vector2(-46, 7), TOUCH_SHOTS[i][1], HORIZONTAL_ALIGNMENT_CENTER, 92, 17, CREAM)
+		var r: float = TOUCH_LAYOUT[TOUCH_SHOTS[i][0]][0]
+		if TOUCH_SHOTS[i][0] == "shot_attack":
+			col = Color(0.75, 0.45, 0.1, 0.9 if b.is_pressed() else 0.65)
+		_touch.draw_circle(b.position, r, col)
+		_touch.draw_arc(b.position, r, 0, TAU, 32, CREAM, 2.0)
+		var fs := 22 if r > 60.0 else (17 if r > 35.0 else 13)
+		_touch.draw_string(font, b.position + Vector2(-r, fs * 0.38), TOUCH_SHOTS[i][1], HORIZONTAL_ALIGNMENT_CENTER, r * 2.0, fs, CREAM)
 
 
 # ---------------------------------------------------------------- layout
+
+## Bottom-left normally; top-centre on touch screens, where the stick lives
+## in the bottom-left corner.
+func _bowler_rect() -> Rect2:
+	if show_touch:
+		return Rect2(size.x * 0.5 - 165.0, 10.0, 330.0, 102.0)
+	return Rect2(10.0, size.y - 112.0, 330.0, 102.0)
+
 
 func _fit() -> void:
 	position = Vector2.ZERO
@@ -636,7 +656,7 @@ func _layout() -> void:
 	_goal.position = Vector2(24, 62)
 	_goal.size.x = 280
 	_over_strip.position = Vector2(s.x * 0.5 - 150, s.y - 46)
-	_bowler.position = Vector2(22, s.y - 106)
+	_bowler.position = _bowler_rect().position + Vector2(12, 6)
 	_cond.position = Vector2(s.x - 318, 18)
 	_big.size = Vector2(s.x, 90)
 	_big.position = Vector2(0, s.y * 0.3)
@@ -651,8 +671,9 @@ func _layout() -> void:
 		p.position = (s - p.size) * 0.5
 	_drs.reset_size()
 	_drs.position = Vector2(s.x - _drs.size.x - 20, s.y * 0.5 - _drs.size.y * 0.5)
-	_stick_center = Vector2(150, s.y - 170)
+	_stick_center = Vector2(150, s.y - 150)
 	for i in _buttons.size():
-		var col := i % 2
-		var row := i / 2
-		_buttons[i].position = Vector2(s.x - 90 - col * 110 - (55 if row % 2 == 1 else 0), s.y - 90 - row * 105)
+		var off: Vector2 = TOUCH_LAYOUT[TOUCH_SHOTS[i][0]][1]
+		_buttons[i].position = Vector2(s.x + off.x, (off.y if off.y > 0.0 else s.y + off.y))
+	var br := _bowler_rect()
+	_bowler.position = br.position + Vector2(12, 6)

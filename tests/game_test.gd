@@ -34,6 +34,25 @@ func press(action: String, on := true) -> void:
 	Input.parse_input_event(ev)
 
 
+## Real touches arrive in window pixels; the HUD lays out in canvas units.
+func _to_window(pos: Vector2) -> Vector2:
+	return game.get_viewport().get_final_transform() * pos
+
+
+func touch(index: int, pos: Vector2, pressed: bool, drag := false) -> void:
+	if drag:
+		var d := InputEventScreenDrag.new()
+		d.index = index
+		d.position = _to_window(pos)
+		Input.parse_input_event(d)
+		return
+	var ev := InputEventScreenTouch.new()
+	ev.index = index
+	ev.position = _to_window(pos)
+	ev.pressed = pressed
+	Input.parse_input_event(ev)
+
+
 func wait_phase(p: int, max_frames := 2000) -> bool:
 	for i in max_frames:
 		if game.phase == p:
@@ -104,6 +123,27 @@ func _run() -> void:
 	await wait_phase(game.Phase.BETWEEN)
 	check(game.wkts == w0, "the review overturns it: not out")
 	check(game.reviews == r0, "a successful review is kept")
+
+	# Touch: hold the stick up (front foot) and tap HIT, as fingers would.
+	game.hud.show_touch = true
+	game.start_level(0)
+	game.hud._layout()
+	check(await wait_phase(game.Phase.FLIGHT), "touch: ball released")
+	var tideal: float = Batting.ideal_press(game.traj, "attack", "front")
+	while game.t < tideal - 0.005:
+		await process_frame
+	var stick: Vector2 = game.hud._stick_center
+	touch(0, stick, true)
+	touch(0, stick + Vector2(0, -70), true, true)
+	await process_frame
+	var hit_btn: TouchScreenButton = game.hud._buttons[1]
+	touch(1, hit_btn.position, true)
+	await process_frame
+	await process_frame
+	touch(1, hit_btn.position, false)
+	touch(0, stick, false)
+	check(game.shot_taken and game.inp.get("shot", "") == "attack", "touch: tapping HIT plays a ground shot")
+	check(game.inp.get("foot", "") == "front", "touch: stick up plays off the front foot")
 
 	print("GAME FAILURES: %d" % fails if fails > 0 else "GAME OK")
 	quit(1 if fails > 0 else 0)
