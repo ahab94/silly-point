@@ -44,7 +44,11 @@ A 3D cricket batting game in Godot 4.7 (GDScript, Compatibility renderer, so it 
 - Presentation:
   - `scripts/game.gd`: the phase machine (PRE → RUNUP → FLIGHT → PLAY → DECIDE → REVIEW/DRS → BETWEEN → END). Also input, cameras, the tracking ghosts, saves (`user://progress.cfg`) and flags.
   - `scripts/stadium.gd`: the ground. The pitch texture is painted from the conditions.
-  - `scripts/figures.gd`: people from primitives. `Batter` has tweened strokes, and its arms follow the bat each frame.
+  - `scripts/rig.gd`: an articulated person. Joints are solved every frame from a pose dict (two-bone IK for arms and legs) and limbs are drawn between them. `play()` blends through keyframes; `run_procedural()` drives running and bowling. `figures.gd` now only provides small mesh helpers.
+  - `scripts/strokes.gd`: all the poses.
+    - Batting strokes are built from the contact point: footwork body, then the bat's sweet spot at the ball with its face pointing along the shot. The swing is that pose rotated about the shoulders around bat×face.
+    - Also: gait (walk and run), ready and catch poses, the bowler's action, the umpire.
+  - Check strokes visually with `godot --path . --script res://tools/pose_sheet.gd -- --out=DIR`. Add `--bowler` or `--gait` for those. It renders PNGs (two angles, contact and follow-through) with a red ball at the contact point.
   - `scripts/hud.gd`: scoreboard, meters, ball cam, timing bar, Snick-o-Scope, review panels, menu and cards, touch stick and buttons.
   - `scripts/sound.gd` plays the files from `tools/make_audio.py`. Regenerate the audio with `/usr/bin/python3 tools/make_audio.py`.
 
