@@ -6,10 +6,12 @@ Two families:
 - Cricket: a woody "tock" off the middle, a "tick" off the edge, pad thuds,
   stumps clattering, and a crowd made of formant-filtered voices (real "oooh",
   "aaah" and "howzat" vowel shapes) plus clapping.
+- Sport: a stadium anthem (driving beat, brass stabs, a cheeky kazoo lead,
+  cowbell), an air horn and drum hit for boundaries, a soft crowd made of
+  filtered noise and claps rather than synthesized voices.
 - Comedy: a duck quacking when you're out for nought, a sad trombone for
   wickets, a slide whistle for sixes, a boing off the helmet, a record
-  scratch when a review is overturned, a pigeon cooing at Pigeon-Eye, and a
-  brass band that has been at the bar since lunch.
+  scratch when a review is overturned, a pigeon cooing at Pigeon-Eye.
 """
 import math
 import os
@@ -172,52 +174,6 @@ def helmet():
                  at(0.06, vibrato(170, 0.65, 0.5, 0.35, 11, shape="tri", glide_to=300, decay=0.28)))
 
 
-def ooh():
-    return crowd_vowel("oo", 1.5, 0.9, glide=0.82, attack=0.1, decay=0.9, seed=21)
-
-
-def aah():
-    return crowd_vowel("ah", 1.4, 0.8, glide=1.05, attack=0.08, decay=0.8, seed=22)
-
-
-def groan():
-    return crowd_vowel("aw", 1.6, 0.85, glide=0.7, attack=0.06, decay=0.9, seed=23)
-
-
-def howzat():
-    """The appeal: a crowd and fielders yelling "how-ZAT?" (rising)."""
-    a = crowd_vowel("aw", 0.25, 0.7, people=10, glide=1.15, attack=0.03, seed=24, spread=0.04)
-    b = crowd_vowel("ay", 0.6, 0.95, people=12, glide=1.25, attack=0.03, decay=0.5, seed=25, spread=0.05)
-    return layer(a, at(0.22, b))
-
-
-def cheer():
-    return layer(crowd_vowel("ay", 2.4, 0.7, people=16, glide=1.08, attack=0.12, decay=1.2, seed=26, spread=0.2),
-                 claps(2.6, 160, 0.35, seed=27))
-
-
-def roar():
-    return layer(crowd_vowel("ah", 3.2, 0.9, people=20, glide=1.12, attack=0.1, decay=1.6, seed=28, spread=0.25),
-                 claps(3.4, 220, 0.4, seed=29))
-
-
-def applause():
-    return claps(3.0, 140, 0.45, seed=30)
-
-
-def murmur(seconds=8.0):
-    """Background crowd: distant chatter, the odd clap and call, looped."""
-    t = Track(seconds, loop=True)
-    t.add(0.0, noise(seconds, 0.22, decay=None, lowpass=650, highpass=140, seed=31))
-    rng = random.Random(32)
-    for k in range(10):
-        t.add(rng.uniform(0, seconds), voice(rng.uniform(130, 300), rng.uniform(0.25, 0.6),
-                                             rng.choice(["ah", "eh", "oo"]), 0.05, attack=0.05, decay=0.3, seed=200 + k))
-    for k in range(18):
-        t.add(rng.uniform(0, seconds), noise(0.03, 0.08, decay=0.006, lowpass=2800, highpass=700, seed=60 + k))
-    return list(t.buf)
-
-
 def click():
     return tone(1200, 0.04, "sine", 0.3, attack=0.0005, decay=0.008)
 
@@ -277,18 +233,142 @@ def coo():
     return layer(c(330, 0.22, 0.9), at(0.26, c(400, 0.42, 0.75)), at(0.74, c(320, 0.3, 0.85)))
 
 
+def crowd_noise(dur, vol, f_from, f_to, attack, decay, seed, q=2.5):
+    """A crowd reacting: band-limited noise whose centre slides like a vowel
+    (no buzzy synthesized voices: a real crowd is mostly breath)."""
+    rng = random.Random(seed)
+    n = int(dur * SR)
+    src = [rng.uniform(-1, 1) for _ in range(n)]
+    out = [0.0] * n
+    y1 = y2 = x1 = x2 = 0.0
+    for i in range(n):
+        t = i / SR
+        f = f_from * (f_to / f_from) ** (t / dur)
+        w = TAU * f / SR
+        alpha = math.sin(w) / (2 * q)
+        a0 = 1 + alpha
+        b0, b2 = alpha / a0, -alpha / a0
+        a1, a2 = -2 * math.cos(w) / a0, (1 - alpha) / a0
+        s = src[i]
+        o = b0 * s + b2 * x2 - a1 * y1 - a2 * y2
+        x2, x1 = x1, s
+        y2, y1 = y1, o
+        env = min(1.0, t / attack) * math.exp(-t / decay) * min(1.0, (dur - t) / 0.1)
+        out[i] = o * env * vol
+    return out
+
+
+def ooh():
+    return crowd_noise(1.0, 0.9, 520, 330, 0.12, 0.45, 21)
+
+
+def aah():
+    return crowd_noise(1.0, 0.8, 700, 820, 0.08, 0.4, 22)
+
+
+def groan():
+    return crowd_noise(1.1, 0.9, 560, 300, 0.05, 0.5, 23)
+
+
+def howzat():
+    """The appeal: a short rising shout from the fielders."""
+    return layer(crowd_noise(0.22, 0.8, 600, 700, 0.02, 0.3, 24, q=3.0),
+                 at(0.2, crowd_noise(0.5, 1.0, 750, 1300, 0.02, 0.25, 25, q=3.0)))
+
+
+def cheer():
+    return layer(crowd_noise(1.4, 0.8, 900, 1200, 0.06, 0.6, 26, q=1.8), claps(1.5, 120, 0.35, seed=27))
+
+
+def roar():
+    return layer(crowd_noise(2.0, 0.9, 800, 1300, 0.05, 0.9, 28, q=1.6), claps(2.1, 170, 0.4, seed=29))
+
+
+def applause():
+    return claps(1.6, 100, 0.4, seed=30)
+
+
+def murmur(seconds=8.0):
+    """A soft, distant stadium bed: no hiss, nothing that draws attention."""
+    t = Track(seconds, loop=True)
+    t.add(0.0, noise(seconds, 0.18, decay=None, lowpass=320, highpass=90, seed=31))
+    return list(t.buf)
+
+
+def air_horn():
+    """The stadium horn: a brassy three-note chord with a little droop."""
+    return layer(*[vibrato(f, 0.75, 0.22, 0.004, 6, shape="square", glide_to=f * 0.985, lowpass=2600, attack=0.015)
+                   for f in (233.0, 293.7, 349.2)])
+
+
+def drum_hit():
+    """A big stadium drum hit with a crash."""
+    return layer(tone(110, 0.5, "sine", 0.9, attack=0.002, decay=0.12, glide_to=45),
+                 noise(0.08, 0.5, decay=0.03, lowpass=3000, seed=33),
+                 noise(1.2, 0.35, decay=0.45, highpass=5000, seed=34))
+
+
 def fanfare_four():
-    """A short brass-band toot: the boundary riff."""
-    beat = 0.14
-    return layer(tune([("G4", 1), ("B4", 1), ("D5", 1), ("G5", 3)], beat, trumpet, 0.35),
-                 tune([("D4", 1), ("G4", 1), ("B4", 1), ("D5", 3)], beat, trumpet, 0.2))
+    """Boundary: drum hit, the horn, and a cheer."""
+    return layer(drum_hit(), at(0.05, air_horn()), at(0.15, [s * 0.6 for s in cheer()]))
 
 
 def fanfare_six():
-    beat = 0.13
-    mel = [("C5", 1), ("C5", 1), ("C5", 1), ("E5", 2), ("C5", 1), ("G5", 4)]
-    low = [("E4", 1), ("E4", 1), ("E4", 1), ("G4", 2), ("E4", 1), ("C5", 4)]
-    return layer(slide_up(), at(0.5, tune(mel, beat, trumpet, 0.38)), at(0.5, tune(low, beat, trumpet, 0.22)))
+    """Six: slide whistle up as it flies, then horn, fanfare and the crowd."""
+    beat = 0.12
+    mel = [("C5", 1), ("E5", 1), ("G5", 1), ("C6", 3)]
+    low = [("E4", 1), ("G4", 1), ("C5", 1), ("E5", 3)]
+    return layer(slide_up(), at(0.55, drum_hit()), at(0.55, air_horn()),
+                 at(0.65, tune(mel, beat, trumpet, 0.35)), at(0.65, tune(low, beat, trumpet, 0.2)),
+                 at(0.6, [s * 0.6 for s in roar()]))
+
+
+def kazoo(note, dur, vol):
+    """A kazoo: a buzzy note through a nasal formant. The cheeky lead."""
+    src = vibrato(hz(note), dur, 1.0, 0.012, 6.5, shape="saw", attack=0.02)
+    return [s * vol for s in layer(bandpass(src, 1100, 3), [x * 0.7 for x in bandpass(src, 2500, 4)])]
+
+
+def stadium_anthem(bpm=126.0):
+    """The theme: a driving stadium beat with brass stabs, a kazoo melody,
+    cowbell and a slide-whistle fill. 8 bars, loops."""
+    beat = 60.0 / bpm
+    bars = 8
+    total = bars * 4 * beat
+    t = Track(total, loop=True)
+    kick = tone(120, 0.22, "sine", 0.85, attack=0.001, decay=0.06, glide_to=45)
+    clap = layer(noise(0.12, 0.5, decay=0.03, lowpass=2500, highpass=900, seed=40),
+                 at(0.012, noise(0.1, 0.4, decay=0.03, lowpass=2600, highpass=1000, seed=41)))
+    hat = noise(0.05, 0.12, decay=0.012, highpass=7000, seed=42)
+    cowbell = layer(tone(540, 0.18, "square", 0.08, decay=0.05, lowpass=3000), tone(800, 0.18, "square", 0.06, decay=0.05, lowpass=3000))
+    prog = [("A1", ("C#4", "E4", "A4")), ("E2", ("B3", "E4", "G#4")), ("F#1", ("C#4", "F#4", "A4")), ("D2", ("D4", "F#4", "A4"))]
+    for b in range(bars):
+        start = b * 4 * beat
+        root, chord = prog[b % 4]
+        for k in range(4):
+            t.add(start + k * beat, kick)
+            if k in (1, 3):
+                t.add(start + k * beat, clap)
+        for k in range(8):
+            t.add(start + k * beat / 2, hat)
+            # Pumping eighth-note bass.
+            t.add(start + k * beat / 2, vibrato(hz(root) * (2 if k % 2 else 1), beat * 0.42, 0.32, 0.0, 1,
+                                              shape="saw", lowpass=420, attack=0.005))
+        # Brass stabs on the "and" of 2 and 4.
+        for k in (1.5, 3.5):
+            for nn in chord:
+                t.add(start + k * beat, vibrato(hz(nn), beat * 0.35, 0.07, 0.0, 1, shape="saw", lowpass=2200, attack=0.008))
+        if b % 2 == 1:
+            t.add(start + 3.5 * beat, cowbell)
+            t.add(start + 3.75 * beat, cowbell)
+    melody = [("E5", 1), ("E5", 0.5), ("C#5", 0.5), ("E5", 1), ("A5", 1), ("G#5", 1.5), ("E5", 0.5), ("B4", 2),
+              ("C#5", 1), ("C#5", 0.5), ("A4", 0.5), ("C#5", 1), ("F#5", 1), ("E5", 1.5), ("D5", 0.5), ("A4", 2),
+              ("E5", 1), ("E5", 0.5), ("C#5", 0.5), ("E5", 1), ("A5", 1), ("B5", 1.5), ("G#5", 0.5), ("E5", 2),
+              ("F#5", 1), ("E5", 1), ("C#5", 1), ("B4", 1), ("A4", 3), (None, 1)]
+    t.add(0.0, tune(melody, beat, kazoo, 0.5))
+    # The fill: a slide whistle swooping into the loop point.
+    t.add(total - beat * 1.1, vibrato(600, beat * 1.0, 0.25, 0.01, 7, glide_to=1900, lowpass=5000))
+    return list(t.buf)
 
 
 def win():
@@ -339,12 +419,12 @@ def main():
         "applause": applause(),
         "duck": duck(), "sad_trombone": sad_trombone(), "slide_up": slide_up(), "slide_down": slide_down(),
         "record_scratch": record_scratch(), "coo": coo(), "four": fanfare_four(), "six": fanfare_six(),
-        "win": win(), "ding": ding(),
+        "win": win(), "ding": ding(), "horn": air_horn(), "drum_hit": drum_hit(),
     }
     for name, s in sfx.items():
         write_wav(os.path.join(OUT, "sfx", name + ".wav"), s)
     write_wav(os.path.join(OUT, "loops", "murmur.wav"), murmur(), peak=0.5)
-    write_wav(os.path.join(OUT, "music", "brass_band.wav"), brass_band(), peak=0.7)
+    write_wav(os.path.join(OUT, "music", "stadium.wav"), stadium_anthem(), peak=0.75)
 
 
 if __name__ == "__main__":

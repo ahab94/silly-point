@@ -2,13 +2,13 @@
 
 importer="wav"
 type="AudioStreamWAV"
-uid="uid://b5swxgmw5umus"
-path="res://.godot/imported/brass_band.wav-8b4e6c836a32282952c9d5dbcf5baab0.sample"
+uid="uid://cx47ys3qmuf4w"
+path="res://.godot/imported/stadium.wav-354c610abd209e0bdfcca9200d0d0827.sample"
 
 [deps]
 
-source_file="res://audio/music/brass_band.wav"
-dest_files=["res://.godot/imported/brass_band.wav-8b4e6c836a32282952c9d5dbcf5baab0.sample"]
+source_file="res://audio/music/stadium.wav"
+dest_files=["res://.godot/imported/stadium.wav-354c610abd209e0bdfcca9200d0d0827.sample"]
 
 [params]
 

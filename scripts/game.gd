@@ -686,7 +686,7 @@ func _impact_sound() -> void:
 		sound.play("stumps", 0.0)
 	# Anything that might be out gets a big appeal from the fielders.
 	if out_o.dismissal in ["lbw", "caught_behind"]:
-		sound.play("howzat", -3.0, randf_range(0.95, 1.05), 0.25)
+		sound.play("howzat", -6.0, randf_range(0.95, 1.05), 0.25)
 
 
 ## Dev flag --log-events: timestamped moments, for cutting videos.
@@ -700,32 +700,28 @@ func _muted() -> bool:
 
 
 ## The crowd, and the comedy: a quacking duck for nought, a sad trombone for
-## other wickets, a brass band for boundaries, a slide whistle for sixes.
+## other wickets, a stadium horn for boundaries, a slide whistle for sixes.
 func _crowd_sound(out: bool) -> void:
 	if _muted():
 		return
 	var o := out_o
 	if out:
-		sound.play("groan", -6.0)
+		sound.play("groan", -9.0)
 		if batter_runs == 0:
 			sound.play("duck", -1.0, 1.0, 0.5)
 		else:
 			sound.play("sad_trombone", -3.0, 1.0, 0.4)
 	elif int(o.runs) == 6:
-		sound.play("six", -2.0)
-		sound.play("roar", -4.0, 1.0, 0.3)
+		sound.play("six", -3.0)       # slide whistle, horn, fanfare and crowd in one
 	elif int(o.runs) == 4:
-		sound.play("four", -2.0)
-		sound.play("cheer", -5.0, 1.0, 0.15)
+		sound.play("four", -3.0)      # drum, horn and a cheer
 	elif o.comment == "dropped":
 		sound.play("slide_down", -3.0)
 		sound.play("groan", -5.0, 1.0, 0.2)
 	elif o.comment in ["beaten", "not_out_pad"]:
-		sound.play("ooh", -4.0)
+		sound.play("ooh", -8.0)
 	elif o.comment == "edge_safe":
-		sound.play("aah", -4.0)
-	elif int(o.runs) >= 2:
-		sound.play("applause", -10.0)
+		sound.play("aah", -8.0)
 	elif o.comment in ["dot", "leave"] and randf() < 0.1:
 		sound.play("coo", -8.0, randf_range(0.9, 1.1))    # a pigeon wanders across
 

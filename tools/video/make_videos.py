@@ -11,7 +11,7 @@ docs/marketing/youtube.md (titles, descriptions, tags for uploading).
 Each video is a list of segments cut from the footage (optionally sped up),
 with captions burned on top. Audio = the footage's game sound (bat, crowd and
 the game's own comedy stingers: the duck, the sad trombone, the slide
-whistle) + the brass-band theme + extra stingers. Adapted from Air
+whistle) + the stadium anthem + extra stingers. Adapted from Air
 Superiority Complex's video tools.
 """
 import json
@@ -212,7 +212,7 @@ def thumbnail_png(path, frame_src=None, t=0.0, lines=("WHO WON?", "BOTH."), colo
 # Segment times are in seconds of the source clip (see its .events file);
 # caption and sfx times are in seconds of the finished video, counted from
 # the first gameplay frame (after any intro card). The game's own sounds (bat,
-# crowd, the duck, the sad trombone, the brass band) are already in the
+# crowd, the duck, the sad trombone, the stadium horn) are already in the
 # footage; "sfx" adds extra stingers on top.
 
 T1 = ["silly point", "game trailer", "indie game trailer", "cricket video game"]
@@ -220,7 +220,7 @@ SH = ["shorts"]
 
 VIDEOS = [
     {
-        "id": "01-trailer", "orient": "landscape", "music": "brass_band",
+        "id": "01-trailer", "orient": "landscape", "music": "stadium",
         "intro": ("OLD BALLS. CRACKED PITCHES.\nJUST BAT.", 2.6),
         "segments": [
             ("l-sixes1", 12.0, 18.5, 1.0), ("l-googly", 5.2, 10.4, 1.0), ("l-reverse", 31.3, 36.0, 1.0),
@@ -360,13 +360,13 @@ VIDEOS = [
         "id": "10-sixes", "orient": "portrait",
         "segments": [("p-sixes2", 0.4, 22.5, 1.0)],
         "captions": [
-            (0.0, 2.0, "Every six gets\nthe brass band", "hook"),
+            (0.0, 2.0, "Every six gets\nthe full stadium", "hook"),
             (2.0, 5.8, "SIX x1", "counter"),
             (9.3, 13.1, "SIX x2", "counter"),
             (16.7, 20.9, "SIX x3", "counter"),
         ],
         "sfx": [],
-        "title": "Every six gets a slide whistle and a brass band 🎺 #shorts",
+        "title": "Every six gets a slide whistle and an air horn 🎺 #shorts",
         "blurb": "Three in a row on a Day 5 pitch. Free cricket game in your browser.",
         "tags": BASE_TAGS + SH + ["six", "sixes"],
     },
@@ -507,7 +507,7 @@ def build(v, tmp):
             t += (b - a) / speed
             cues.append((t - 0.15, "whoosh", 0.5))
     base = n_caps + 1
-    audio_inputs = ["-stream_loop", "-1", "-i", music_path(v.get("music", "brass_band"))]
+    audio_inputs = ["-stream_loop", "-1", "-i", music_path(v.get("music", "stadium"))]
     mix = ["[0:a]volume=1.0[g]", f"[{base}:a]volume={v.get('music_volume', 0.3)}[m]"]
     labels = ["[g]", "[m]"]
     for j, (t, name, vol) in enumerate(cues):

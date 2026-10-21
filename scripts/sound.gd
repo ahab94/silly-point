@@ -1,5 +1,5 @@
 extends Node
-## Sound effects, the crowd and the brass band. Every file in audio/ is
+## Sound effects, the crowd and the stadium anthem. Every file in audio/ is
 ## synthesized by tools/make_audio.py.
 ##
 ## Godot concept: an AudioStreamPlayer plays one sound at a time, so a small
@@ -8,7 +8,7 @@ extends Node
 
 const SFX_NAMES := ["tock", "tock_soft", "edge", "pad", "stumps", "helmet", "click", "ooh", "aah",
 	"groan", "howzat", "cheer", "roar", "applause", "duck", "sad_trombone", "slide_up", "slide_down",
-	"record_scratch", "coo", "four", "six", "win", "ding"]
+	"record_scratch", "coo", "four", "six", "win", "ding", "horn", "drum_hit"]
 
 var _sfx := {}
 var _pool: Array[AudioStreamPlayer] = []
@@ -23,8 +23,8 @@ func _ready() -> void:
 		var p := AudioStreamPlayer.new()
 		add_child(p)
 		_pool.append(p)
-	_murmur = _looping("res://audio/loops/murmur.wav", -16.0)
-	_music = _looping("res://audio/music/brass_band.wav", -9.0)
+	_murmur = _looping("res://audio/loops/murmur.wav", -24.0)   # barely there
+	_music = _looping("res://audio/music/stadium.wav", -10.0)
 
 
 func _looping(path: String, db: float) -> AudioStreamPlayer:
