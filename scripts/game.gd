@@ -1214,6 +1214,12 @@ func _place_bowler(k: float) -> void:
 
 func _start_runup() -> void:
 	var r := _runup_time()
+	# Two taps of the bat while the bowler runs in, then the trigger movement
+	# so the batter is set at release.
+	var keys := Strokes.taps(2 if r > 1.2 else 1)
+	keys.append([maxf(0.05, r - 0.35 - 0.7), {}])
+	keys.append([0.3, Strokes.trigger(), "out"])
+	batter.play(keys)
 	var spin := Bowling.is_spinner(bowler)
 	bowler_fig.run_procedural(func(tt: float) -> Dictionary: return Strokes.bowler_pose(tt, r, spin))
 

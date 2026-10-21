@@ -26,21 +26,47 @@ static func _n(x: float, y: float, z: float) -> Vector3:
 
 # ---------------------------------------------------------------- batter
 
+## The batter's style: an upright, still stance with the bat held just off
+## the ground, a couple of taps while the bowler runs in, a small
+## back-and-across trigger movement before release, a high backlift towards
+## gully, and big held finishes on the drives and the wristy flick.
 static func stance() -> Dictionary:
 	return {
-		"pelvis": Vector3(0.02, 0.86, 0.0), "face": _n(1, 0, -0.15), "hip_face": _n(1, 0, 0.05),
-		"lean": Vector3(0.08, 0.0, -0.02),
-		"lf": Vector3(0.04, 0.07, -0.27), "rf": Vector3(0.0, 0.07, 0.2),
+		"pelvis": Vector3(0.02, 0.9, 0.0), "face": _n(1, 0, -0.18), "hip_face": _n(1, 0, 0.05),
+		"lean": Vector3(0.06, 0.0, -0.02),
+		"lf": Vector3(0.04, 0.07, -0.26), "rf": Vector3(0.0, 0.07, 0.19),
 		"lfd": _n(0.6, 0, -0.8), "rfd": _n(1, 0, 0.15),
-		"grip": Vector3(0.3, 0.84, 0.06), "bat": _n(0.05, -0.95, 0.28), "batface": _n(0.15, 0, -1),
+		"grip": Vector3(0.28, 0.92, 0.05), "bat": _n(0.05, -0.93, 0.36), "batface": _n(0.15, 0, -1),
 		"lpole": _n(0.3, -0.2, -1), "rpole": _n(0.2, -1, 0.6),
+	}
+
+
+## A tap of the bat on the crease, keeping the rhythm while the bowler runs in.
+static func tap() -> Dictionary:
+	return {"grip": Vector3(0.29, 0.84, 0.03), "bat": _n(0.04, -0.98, 0.18)}
+
+
+static func taps(count: int) -> Array:
+	var keys := []
+	for i in count:
+		keys.append([0.13, tap(), "in"])
+		keys.append([0.22, stance(), "out"])
+	return keys
+
+
+## Trigger movement: back foot back and across towards off stump, front foot
+## following, bat starting up. The batter is set as the ball is released.
+static func trigger() -> Dictionary:
+	return {
+		"rf": Vector3(0.1, 0.07, 0.24), "lf": Vector3(0.1, 0.07, -0.22), "pelvis": Vector3(0.08, 0.88, 0.01),
+		"grip": Vector3(0.2, 1.08, 0.12), "bat": _n(0.3, 0.55, 0.78), "batface": _n(1, 0, 0.1),
 	}
 
 
 static func backlift() -> Dictionary:
 	return {
-		"pelvis": Vector3(0.02, 0.85, 0.0), "grip": Vector3(0.16, 1.18, 0.18),
-		"bat": _n(0.05, 0.62, 0.8), "batface": _n(1, 0, 0.2), "lean": Vector3(0.07, 0.0, -0.04),
+		"pelvis": Vector3(0.08, 0.87, 0.01), "grip": Vector3(0.17, 1.24, 0.17),
+		"bat": _n(0.38, 0.72, 0.58), "batface": _n(1, 0, 0.25), "lean": Vector3(0.06, 0.0, -0.04),
 	}
 
 
@@ -141,13 +167,27 @@ static func shot(key: String, foot: String, dir_deg: float, c: Vector3, t: float
 	var top := _rot_pose(pose, pivot, axis, -back_ang)
 	var follow := _rot_pose(pose, pivot, axis, follow_ang)
 	follow.lean = (pose.lean as Vector3) + (Vector3(-0.05, 0, 0.08) if loft else d * 0.06)
+	var hold := 0.7
+	if key in ["cover", "straight", "lofted_cover", "lofted_straight"]:
+		# The held, high finish: head still, bat over the front shoulder.
+		follow_ang += 0.25
+		follow = _rot_pose(pose, pivot, axis, follow_ang)
+		follow.lean = (pose.lean as Vector3) + d * 0.05
+		hold = 1.1
+	elif key == "flick":
+		# Wristy flick: the wrists roll it through midwicket and the back leg
+		# kicks up behind as the weight goes onto the front foot.
+		follow = _rot_pose(pose, pivot, axis, follow_ang + 0.35)
+		follow.rf = (pose.rf as Vector3) + Vector3(-0.05, 0.3, 0.12)
+		follow.lean = (pose.lean as Vector3) + Vector3(0.0, 0.0, -0.08)
+		hold = 0.9
 	if key in ["pull", "hook", "sweep", "slog_sweep", "reverse_sweep"]:
 		# Horizontal shots finish up over the shoulder, not along the ground.
 		follow.bat = ((follow.bat as Vector3) + Vector3.UP * 0.9).normalized()
 		follow.grip = (follow.grip as Vector3) + Vector3.UP * 0.3
 	if defend:
 		return [[t * 0.5, top, "out"], [t * 0.5, pose, "in"], [0.25, follow, "out"], [0.6, follow]]
-	return [[t * 0.42, top, "out"], [t * 0.58, pose, "in"], [0.3, follow, "out"], [0.7, follow]]
+	return [[t * 0.42, top, "out"], [t * 0.58, pose, "in"], [0.3, follow, "out"], [hold, follow]]
 
 
 static func leave() -> Array:

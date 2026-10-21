@@ -12,6 +12,8 @@ const Batting := preload("res://scripts/batting.gd")
 # name, shot key, footwork, direction, contact point (world), swing time, loft
 const SHOTS := [
 	["stance", "", "", 0.0, Vector3.ZERO, 0.0, false],
+	["tap", "", "", 0.0, Vector3.ZERO, 0.0, false],
+	["trigger", "", "", 0.0, Vector3.ZERO, 0.0, false],
 	["backlift", "", "", 0.0, Vector3.ZERO, 0.0, false],
 	["forward defence", "defend", "front", 0.0, Vector3(0.05, 0.35, -1.95), 0.17, false],
 	["back defence", "defend_back", "back", 0.0, Vector3(0.05, 0.9, -0.75), 0.17, false],
@@ -131,7 +133,13 @@ func _run() -> void:
 		batter.set_pose(Strokes.stance())
 		ball.visible = false
 		if name == "backlift":
-			batter.play([[0.3, Strokes.backlift()]])
+			batter.play([[0.3, Strokes.trigger()], [0.3, Strokes.backlift()]])
+			stages = [["", 0.65]]
+		elif name == "tap":
+			batter.play([[0.13, Strokes.tap()]])
+			stages = [["", 0.15]]
+		elif name == "trigger":
+			batter.play([[0.3, Strokes.trigger()]])
 			stages = [["", 0.35]]
 		elif key == "leave":
 			batter.play(Strokes.leave())
