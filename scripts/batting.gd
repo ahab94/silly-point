@@ -23,8 +23,8 @@ const BallSim := preload("res://scripts/ball_sim.gd")
 
 const ADJUST := 0.3
 const SWING_T := {"defend": 0.17, "attack": 0.21, "loft": 0.24, "sweep": 0.22}
-const WINDOW := {"defend": 0.13, "attack": 0.1, "loft": 0.09, "sweep": 0.1}
-const PERFECT := 0.022
+const WINDOW := {"defend": 0.18, "attack": 0.14, "loft": 0.13, "sweep": 0.14}   # forgiving: a human can hit these
+const PERFECT := 0.035
 # Where the bat meets the ball, and where the front pad is (z).
 const PLANE := {"front": -1.95, "neutral": -1.45, "back": -0.75, "dance": -3.4}
 const PAD_Z := {"front": -1.72, "neutral": -1.15, "back": -0.5, "dance": -3.15}

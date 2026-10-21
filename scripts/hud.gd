@@ -324,11 +324,13 @@ func _draw_timing(c: Vector2) -> void:
 	var w := 320.0
 	draw_rect(Rect2(c.x - w * 0.5 - 6, c.y - 30, w + 12, 54), PANEL)
 	draw_rect(Rect2(c.x - w * 0.5, c.y, w, 12), Color(1, 1, 1, 0.15))
-	draw_rect(Rect2(c.x - 14, c.y, 28, 12), Color(0.35, 0.85, 0.4, 0.8))
+	# The green "Perfect" zone, to scale with batting.gd's PERFECT (0.035 s
+	# of a 0.16 s half-width).
+	draw_rect(Rect2(c.x - 35, c.y, 70, 12), Color(0.35, 0.85, 0.4, 0.8))
 	var font := get_theme_default_font()
 	draw_string(font, Vector2(c.x - w * 0.5, c.y - 6), "EARLY", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, CREAM)
 	draw_string(font, Vector2(c.x + w * 0.5 - 34, c.y - 6), "LATE", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, CREAM)
-	var x := c.x - clampf(_timing_te / 0.12, -1.0, 1.0) * w * 0.5
+	var x := c.x - clampf(_timing_te / 0.16, -1.0, 1.0) * w * 0.5
 	draw_rect(Rect2(x - 3, c.y - 6, 6, 24), GOLD)
 	draw_string(font, Vector2(c.x - 100, c.y - 8), _timing_label, HORIZONTAL_ALIGNMENT_CENTER, 200, 18, GOLD)
 

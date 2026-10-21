@@ -17,8 +17,9 @@ var _music: AudioStreamPlayer
 
 
 func _ready() -> void:
-	# Keep the whole game gentle: the user wants it sporty, not loud.
-	AudioServer.set_bus_volume_db(0, -6.0)
+	# The mix keeps music and crowd in the background and the stingers as
+	# accents; the master stays at full so phone speakers can still be heard.
+	AudioServer.set_bus_volume_db(0, 0.0)
 	for n in SFX_NAMES:
 		_sfx[n] = load("res://audio/sfx/%s.wav" % n)
 	for i in 10:
@@ -26,7 +27,7 @@ func _ready() -> void:
 		add_child(p)
 		_pool.append(p)
 	_murmur = _looping("res://audio/loops/murmur.wav", -28.0)   # barely there
-	_music = _looping("res://audio/music/stadium.wav", -17.0)
+	_music = _looping("res://audio/music/stadium.wav", -14.0)
 
 
 func _looping(path: String, db: float) -> AudioStreamPlayer:
