@@ -19,6 +19,7 @@ Controls are in the Cricket 07 style: hold a direction, press a shot key as the 
 | Sweep | I (or V) | SWEEP |
 | Leave | press nothing | press nothing |
 | Charge down the pitch | Shift (just after release) | CHARGE |
+| Switch camera (behind the batter or TV view) | C | CAM |
 | Review an out decision | R | Review button |
 | Menu | Esc | Menu button |
 

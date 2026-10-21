@@ -42,7 +42,7 @@ var level: Dictionary = {}
 var cond
 var rng := RandomNumberGenerator.new()
 var save_enabled := true
-var cam_mode := "bowler"           # "bowler" (TV view from the bowler's end) or "batter"
+var cam_mode := "batter"           # "batter" (behind the batter, the default) or "bowler" (TV view)
 var best_stars := {}
 
 # Scene pieces
