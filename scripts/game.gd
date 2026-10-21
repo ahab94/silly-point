@@ -26,8 +26,8 @@ const Sound := preload("res://scripts/sound.gd")
 
 const SAVE_PATH := "user://progress.cfg"
 const BALL_VISUAL_R := 0.05      # drawn a little bigger than life so you can see it
-const BAT_CAM_POS := Vector3(0.55, 2.75, 5.0)
-const BAT_CAM_LOOK := Vector3(-0.05, 0.45, -12.0)
+const BAT_CAM_POS := Vector3(0.45, 2.25, 3.7)
+const BAT_CAM_LOOK := Vector3(-0.1, 0.9, -8.0)
 # The TV view: a long lens from high behind the bowler's end.
 const BOWL_CAM_POS := Vector3(0.0, 9.0, -62.0)
 const BOWL_CAM_LOOK := Vector3(-0.1, 0.5, -4.5)
