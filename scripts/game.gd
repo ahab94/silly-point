@@ -86,7 +86,8 @@ var flight_end := 0.0
 var play_t := 0.0
 var was_out := false
 var batter_runs := 0
-var _reviewed := false                 # this batter's score (out for 0 is a duck)
+var _reviewed := false
+var _bowler_fielding := false      # the bowler has left the follow-through to chase the ball                 # this batter's score (out for 0 is a duck)
 var _decision_shown := false
 var _bot_plan: Dictionary = {}
 var _since_release := 0.0
@@ -374,6 +375,8 @@ func _new_ball() -> void:
 	_place_fielders()
 	_place_bowler(0.0)
 	_keeper_taken = false
+	_bowler_fielding = false
+	bowler_fig.set_meta("state", "")
 	_reviewed = false
 	_defl = {}
 	bowler_fig.set_pose(Strokes.ready_pose(Vector3(0, 0, 1), 0.0))
@@ -450,7 +453,8 @@ func _process(delta: float) -> void:
 				_after_ball()
 	if phase >= Phase.FLIGHT and phase != Phase.END:
 		_since_release += delta
-		_place_bowler(1.0 + _since_release / _runup_time())
+		if not _bowler_fielding:
+			_place_bowler(1.0 + _since_release / _runup_time())
 	_update_figures(delta)
 	_update_camera(delta)
 
@@ -573,6 +577,10 @@ func _resolve() -> void:
 			_sim_time, balls, bowler.name, d.label, float(d.speed) * 3.6, -float((traj.pitch_pos as Vector3).z),
 			inp.shot, inp.foot, inp.aim, float(bat.te), float(bat.ex), float(bat.ey), bat.contact,
 			int(out_o.runs), "%s ump=%s truth=%s" % [out_o.dismissal, out_o.umpire_out, out_o.truth_out] if out_o.dismissal != "" else ""])
+		var fr_t: Dictionary = out_o.get("field", {})
+		if not fr_t.is_empty():
+			print("    fielding: %s by %s at t=%.2f%s" % [fr_t.result, field[int(fr_t.fielder)].name if int(fr_t.fielder) >= 0 else "-",
+					float(fr_t.t_end), (" (misfield: %s)" % fr_t.misfield) if String(fr_t.get("misfield", "")) != "" else ""])
 
 
 func _flight(delta: float) -> void:
@@ -716,7 +724,7 @@ func _play(delta: float) -> void:
 		var result: String = fr.result
 		var thrown := result == "runs" or result == "dropped"
 		var throw_dur := 0.0
-		var catcher: Node3D = fielder_figs[int(fr.fielder)] if int(fr.fielder) >= 0 else null
+		var catcher: Node3D = _fig(int(fr.fielder)) if int(fr.fielder) >= 0 else null
 		if thrown and catcher:
 			throw_dur = clampf(catcher.position.distance_to(Vector3(0, 0, 1)) / 26.0, 0.25, 2.2)
 		_chase(fr, catcher)
@@ -755,10 +763,21 @@ func _play(delta: float) -> void:
 
 ## Fielders run to the ball (a running gait while they move), then catch it,
 ## gather it, or chase it to the rope.
+## The figure for fielder i. The bowler is a fielder too (stopping it in the
+## follow-through), but is drawn by the bowler's own figure.
+func _fig(i: int) -> Node3D:
+	if i >= 0 and i < field.size() and field[i].name == "Bowler":
+		return bowler_fig
+	return fielder_figs[i]
+
+
 func _chase(fr: Dictionary, catcher: Node3D) -> void:
+	_misfields(fr)
 	for ch in fr.chase:
 		var i := int(ch.i)
-		var f: Node3D = fielder_figs[i]
+		var f: Node3D = _fig(i)
+		if f == bowler_fig:
+			_bowler_fielding = true
 		var to: Vector2 = ch.to
 		var start: Vector2 = (field[i].pos as Vector2)
 		var k := clampf(play_t / maxf(float(ch.t), 0.1), 0.0, 1.0)
@@ -792,6 +811,36 @@ func _chase(fr: Dictionary, catcher: Node3D) -> void:
 			f.set_meta("state", "stop")
 			var face2 := Vector3(-f.position.x, 0.0, -f.position.z).normalized()
 			f.play([[0.25, Strokes.ready_pose(face2, 0.2)]])
+
+
+## Fielders who dived and missed: run across, dive full length as the ball
+## goes past, then get back up.
+func _misfields(fr: Dictionary) -> void:
+	for m in fr.get("misfields", []):
+		var i := int(m.i)
+		var f: Node3D = _fig(i)
+		if f == bowler_fig:
+			_bowler_fielding = true
+		var start: Vector2 = (field[i].pos as Vector2)
+		var to: Vector2 = m.to
+		var t_dive: float = m.t
+		var state: String = f.get_meta("state", "")
+		var dir := (to - start)
+		var reach_pt := start + dir.limit_length(maxf(0.0, dir.length() - 1.6))
+		if play_t < t_dive - 0.25:
+			var k := clampf(play_t / maxf(t_dive - 0.25, 0.1), 0.0, 1.0)
+			var at := start.lerp(reach_pt, k)
+			f.position = Vector3(at.x, 0.0, at.y)
+			if state != "run" and dir.length() > 0.6:
+				var d3 := Vector3(dir.x, 0.0, dir.y).normalized()
+				f.run_procedural(func(tt: float) -> Dictionary: return Strokes.gait(tt, 6.0, d3))
+				f.set_meta("state", "run")
+		elif state != "dive" and state != "up":
+			f.set_meta("state", "dive")
+			var d3b := Vector3(dir.x, 0.0, dir.y)
+			d3b = d3b.normalized() if d3b.length() > 0.01 else Vector3.FORWARD
+			f.play([[0.25, Strokes.dive_pose(d3b), "out"], [0.6, {}], [0.4, Strokes.ready_pose(d3b, 0.3)]])
+			f.set_meta("state", "up")
 
 
 ## Heads follow the ball; the keeper takes the ones that go through.

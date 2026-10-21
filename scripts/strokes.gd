@@ -214,6 +214,21 @@ static func catch_pose(face: Vector3, at: Vector3) -> Dictionary:
 	return p
 
 
+## Full-length dive towards `dir`: body low and stretched, arms reaching.
+static func dive_pose(dir: Vector3) -> Dictionary:
+	dir.y = 0.0
+	dir = dir.normalized()
+	var right := dir.cross(Vector3.UP).normalized()
+	return {
+		"pelvis": Vector3(0, 0.3, 0) + dir * 0.6, "face": dir, "hip_face": dir,
+		"lean": dir * 1.6 + Vector3.DOWN * 0.2,
+		"lf": -dir * 0.4 - right * 0.15 + Vector3.UP * 0.12, "rf": -dir * 0.55 + right * 0.15 + Vector3.UP * 0.2,
+		"lfd": dir, "rfd": dir,
+		"lh": dir * 1.6 - right * 0.12 + Vector3.UP * 0.25, "rh": dir * 1.6 + right * 0.12 + Vector3.UP * 0.25,
+		"lpole": Vector3.DOWN, "rpole": Vector3.DOWN,
+	}
+
+
 # ---------------------------------------------------------------- bowler
 
 ## Bowler's action over the run-up. `t` from the start, release at

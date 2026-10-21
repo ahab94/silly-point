@@ -94,7 +94,7 @@ func _run() -> void:
 	world.add_child(cam)
 	cam.current = true
 
-	if "--bowler" in OS.get_cmdline_user_args() or "--gait" in OS.get_cmdline_user_args():
+	if "--bowler" in OS.get_cmdline_user_args() or "--gait" in OS.get_cmdline_user_args() or "--dive" in OS.get_cmdline_user_args():
 		batter.visible = false
 		ball.visible = false
 		var bw := Rig.new()
@@ -106,7 +106,9 @@ func _run() -> void:
 		var times := [0.3, 0.6, 0.9, 1.0, 1.1, 1.2, 1.3, 1.36, 1.4, 1.46, 1.55, 1.7, 1.9, 2.2, 2.6, 3.0]
 		var n := 0
 		for tt in times:
-			if gait:
+			if "--dive" in OS.get_cmdline_user_args():
+				bw.set_pose(Strokes.dive_pose(Vector3(0, 0, 1)))
+			elif gait:
 				bw.set_pose(Strokes.gait(float(tt), 6.5, Vector3(0, 0, 1)))
 			else:
 				bw.set_pose(Strokes.bowler_pose(float(tt), 1.4, spin))

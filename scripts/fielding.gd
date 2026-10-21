@@ -53,7 +53,8 @@ static func make_field(name: String) -> Array:
 		out.append({"name": f[0], "pos": polar(f[1], dist), "close": dist < 17.0,
 				"keeper": f[0] == "Wicketkeeper"})
 	# The bowler finishes the follow-through just down the pitch.
-	out.append({"name": "Bowler", "pos": Vector2(-0.6, -15.5), "close": false, "keeper": false, "slow": true})
+	# Where the run-up's follow-through finishes (game.gd _place_bowler).
+	out.append({"name": "Bowler", "pos": Vector2(-0.3, -16.8), "close": false, "keeper": false, "slow": true})
 	return out
 
 
@@ -85,7 +86,7 @@ static func play(exit_pos: Vector3, exit_vel: Vector3, field: Array, seed: int) 
 	var pts: PackedVector3Array = path.pts
 	var dt := BallSim.HIT_DT
 	var res := {"result": "runs", "runs": 0, "fielder": -1, "t_end": float(path.end_t),
-			"catch_pos": Vector3.ZERO, "path": path, "chase": [], "catch_chance": 0.0, "misfield": ""}
+			"catch_pos": Vector3.ZERO, "path": path, "chase": [], "catch_chance": 0.0, "misfield": "", "misfields": []}
 	var catch_try := _best_catch(pts, dt, field)
 	var missed: Array = []
 	var bounced := false
@@ -134,6 +135,7 @@ static func play(exit_pos: Vector3, exit_vel: Vector3, field: Array, seed: int) 
 					if _rng(seed, 100 + fi).randf() > stop:
 						missed.append(fi)
 						res.misfield = field[fi].name
+						res.misfields.append({"i": fi, "t": t, "to": flat})
 						continue
 					res.fielder = fi
 					res.t_end = t
